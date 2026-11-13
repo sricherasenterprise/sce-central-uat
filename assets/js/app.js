@@ -11,6 +11,7 @@
   const LIVE = window.SCE_LIVE || null;
   const LIVE_USER = LIVE ? LIVE.user() : null;
   if (LIVE && !LIVE.demo && !LIVE_USER) { LIVE.renderLogin(); return; }
+  if (LIVE_USER && LIVE.mustChange()) { LIVE.renderChangePassword(); return; }
 
   /* ========== Tarikh (ISO, GMT+8) ========== */
   const TZ = "Asia/Kuala_Lumpur";
@@ -1174,7 +1175,50 @@
     ["Login dan sesi", "Belum wujud", "Pemilih DEV DEMO ONLY sahaja. Tiada pengesahan identiti."],
     ["Penguatkuasaan backend", "Belum disambung", "Semua kawalan di atas mesti dilaksanakan semula di API / Apps Script sebelum data sebenar digunakan."]
   ];
+  /* ========== Pengguna & password (mod LIVE) ========== */
+  function liveChangePassword() {
+    openForm({ live: true, title: "Tukar Password", submit: "Tukar Password", intro: note("Minimum 10 aksara, dengan huruf dan nombor. Sesi lain akan dilog keluar."), fields: [
+      { name: "lama", label: "Password semasa", type: "password", required: true, maxlength: 200, full: true },
+      { name: "baru", label: "Password baharu", type: "password", required: true, maxlength: 200, full: true },
+      { name: "sah", label: "Sahkan password baharu", type: "password", required: true, maxlength: 200, full: true }
+    ], onSubmit: async (d) => {
+      if (d.baru !== d.sah) { toast("Pengesahan password tidak sepadan."); return; }
+      try { await LIVE.api("auth.changePassword", { lama: d.lama, baru: d.baru }); toast("Password berjaya ditukar."); }
+      catch (e) { toast(e.message || "Gagal menukar password."); }
+    } });
+  }
+  function liveResetPassword(emel, nama) {
+    openForm({ live: true, title: "Reset Password: " + nama, submit: "Reset Password", intro: note("Password sementara akan dijana. Pengguna wajib menukarnya semasa log masuk seterusnya, dan sesi mereka sekarang akan ditamatkan."), fields: [
+      { name: "sahkan", label: "Saya akan menyampaikan password sementara kepada " + nama + " secara peribadi", type: "confirm", required: true }
+    ], onSubmit: async () => {
+      try {
+        const o = await LIVE.api("users.resetPassword", { emel: emel });
+        openInfo({ title: "Password sementara: " + o.nama, body: '<p class="small muted">Sampaikan secara peribadi (bukan dalam group). Paparan ini tidak akan ditunjukkan semula.</p><p class="temp-pw tnum">' + esc(o.passwordSementara) + "</p>" + note("Pengguna akan diminta menukar password ini semasa log masuk.") });
+        LD.users = null; liveLoadUsers();
+      } catch (e) { toast(e.message || "Gagal reset password."); }
+    } });
+  }
+  function liveLoadUsers() {
+    if (LD.busyUsers) return; LD.busyUsers = true;
+    LIVE.api("users.list").then((o) => { LD.users = o; LD.errUsers = null; }).catch((e) => { LD.errUsers = e.message; }).finally(() => { LD.busyUsers = false; if (currentRoute() === "access") refresh(); });
+  }
+  function viewAccessLive() {
+    const head = pageHead("Pengguna & Akses", "Akaun DEV daripada SCE-DEV-AUTH. Pendaftaran akaun baharu masih melalui Sheet oleh SUPER ADMIN.", liveTagDev);
+    if (LIVE_USER.role !== "SUPER_ADMIN") return head + note("Hanya SUPER ADMIN boleh mengurus pengguna dan reset password.");
+    if (LD.errUsers) return head + '<section class="panel"><div class="empty"><p>' + esc(LD.errUsers) + "</p></div></section>";
+    if (!LD.users) { liveLoadUsers(); return head + '<section class="panel"><div class="empty" role="status"><p>Memuatkan pengguna…</p></div></section>'; }
+    const d = LD.users;
+    return head + (d.sedia ? "" : note("Reset password belum disediakan (SCE-DEV-CREDENTIALS belum dicipta).")) +
+      '<section class="panel">' + panelHead("Pengguna", d.pengguna.length + " akaun", "", liveTagDev) + table([
+        { h: "Nama", r: (u) => esc(u.nama) }, { h: "Emel", r: (u) => esc(u.emel) }, { h: "Role", r: (u) => esc(LIVE.roleLabel(u.role)) }, { h: "Jawatan", r: (u) => esc(u.jawatan || "—") },
+        { h: "Status", r: (u) => badge(u.status === "AKTIF" ? "Aktif" : "Tidak Aktif") },
+        { h: "Password", r: (u) => (u.mestiTukar ? '<span class="badge warn">Mesti tukar</span>' : u.passwordDikemaskini ? '<span class="small muted">Ditukar ' + fmtDateTime(u.passwordDikemaskini) + "</span>" : '<span class="small muted">Asal</span>') },
+        { h: "Tindakan", r: (u) => (u.emel === d.saya ? '<button type="button" class="btn small" data-action="lt-pw">Tukar password</button>' : d.sedia && u.status === "AKTIF" ? '<button type="button" class="btn small" data-action="lt-reset" data-emel="' + esc(u.emel) + '" data-nama="' + esc(u.nama) + '">Reset password</button>' : "—") }
+      ], d.pengguna) + "</section>";
+  }
+
   function viewAccess() {
+    if (LIVE_USER) return viewAccessLive();
     const tabs = [].concat(can("users.manage") ? ["Pengguna"] : [], can("roles.view") ? ["Role & Permission"] : [], POLICY.audit !== "none" ? ["Audit Log"] : []);
     if (!tabs.includes(f("access.tab"))) state.filters["access.tab"] = tabs[0];
     const tab = f("access.tab");
@@ -1444,6 +1488,8 @@
     "live-detail"(el) { openLiveDetail(el.dataset.kunci); },
     "live-order"(el) { openLiveOrder(el.dataset.id); },
     "lt-new"() { liveTaskNew(); },
+    "lt-pw"() { closePops(); liveChangePassword(); },
+    "lt-reset"(el) { liveResetPassword(el.dataset.emel, el.dataset.nama); },
     async "lt-read-all"() { try { await LIVE.api("notifications.read"); } catch (e) { toast(e.message); } LD.notif = null; liveLoad("notif"); },
     "lt-notif"(el) { closePops(); const id = el.dataset.id; if (currentRoute() !== "tasks") location.hash = "#tasks"; setTimeout(() => liveTaskOpen(id), 200); },
     "lt-open"(el) { liveTaskOpen(el.dataset.id); },
@@ -1841,7 +1887,7 @@
       $("#profile-avatar").textContent = nama.charAt(0);
       $("#profile-name").textContent = nama;
       $("#profile-role").textContent = LIVE.roleLabel(LIVE_USER.role) + (LIVE_USER.jawatan ? " · " + LIVE_USER.jawatan : "");
-      $("#profile-pop").innerHTML = '<button type="button" class="pop-link" data-live-logout>Log keluar</button>';
+      $("#profile-pop").innerHTML = '<button type="button" class="pop-link" data-action="lt-pw">Tukar password</button>' + (LIVE_USER.role === "SUPER_ADMIN" ? '<a href="#access" class="pop-link">Pengguna & Akses</a>' : "") + '<button type="button" class="pop-link" data-live-logout>Log keluar</button>';
       $(".demo-pill").textContent = "DEV";
       $(".demo-bar").innerHTML = "<strong>DEV</strong><span class=\"demo-bar-text\">Program dan DBKL: <b>data sebenar, baca sahaja</b>. Modul lain masih <b>data contoh</b> (persona " + esc(SESSION.role) + ").</span>" +
         '<button type="button" class="link-btn" data-live-logout>Log keluar</button>';

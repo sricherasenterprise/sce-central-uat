@@ -450,3 +450,5 @@ button.pop-link { width: 100%; text-align: left; background: none; border: 0; fo
 .live-list li { display: grid; grid-template-columns: 96px 1fr; gap: 2px var(--s3); padding: var(--s2) 0; border-bottom: 1px solid var(--border); font-size: var(--fs-label); }
 .live-list li:last-child { border-bottom: 0; }
 .live-list li > .muted { grid-column: 2; }
+
+.temp-pw { margin: var(--s4) 0; padding: var(--s4); border-radius: var(--r-sm); background: var(--surface-sunk); font-size: 24px; font-weight: 700; letter-spacing: .08em; text-align: center; user-select: all; }
