@@ -1910,6 +1910,13 @@
     $("#menu-btn").innerHTML = icon("menu");
     renderIdentity();
     render(true);
+    // Pautan dari emel: ?tugasan=SCE-TSK-... membuka butiran tugasan (selepas log masuk).
+    const dariEmel = LIVE_USER && new URLSearchParams(location.search).get("tugasan");
+    if (dariEmel && /^SCE-TSK-[0-9]{4}-[0-9]{4}$/.test(dariEmel)) {
+      try { history.replaceState(null, "", location.pathname + "#tasks"); } catch (e) { /* abaikan */ }
+      if (currentRoute() !== "tasks") location.hash = "#tasks";
+      setTimeout(() => liveTaskOpen(dariEmel), 300);
+    }
   }
   // Fail data kewangan hanya diminta untuk role yang mempunyai finance.view.
   if (can("finance.view")) {
