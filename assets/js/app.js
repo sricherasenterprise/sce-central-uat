@@ -710,7 +710,33 @@
     }
     return html + "</section>";
   }
-  const viewDashboard = () => (LIVE_USER ? liveOpsSummary() : "") + ({ executive: dashExecutive, management: dashManagement, pm: dashPm, staff: dashStaff, viewer: dashViewer }[POLICY.dashboard])();
+  /* UAT: dashboard mod LIVE hanya data sebenar (tiada persona atau panel contoh). */
+  function liveDashboard() {
+    const hour = +new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", hour12: false }).format(new Date());
+    const greet = hour < 12 ? "Selamat pagi" : hour < 14 ? "Selamat tengah hari" : hour < 19 ? "Selamat petang" : "Selamat malam";
+    const dayName = DAYS[new Date(TODAY + "T00:00:00Z").getUTCDay()];
+    const u = LIVE_USER, viewer = u.role === "VIEWER", me = u.emel;
+    let lead = "Ringkasan operasi syarikat di bawah.", tugasanPanel = "", quick = [];
+    if (!viewer) {
+      if (!LD.tasks && !LD.err.tasks) liveLoad("tasks");
+      const t = (LD.tasks && LD.tasks.tasks) || [];
+      const buka = (x) => !["COMPLETED", "CANCELLED"].includes(x.status);
+      const saya = t.filter((x) => buka(x) && [x.primary_assignee].concat(String(x.team || "").split(",")).includes(me));
+      const terima = saya.filter((x) => x.acceptance === "PENDING" && x.primary_assignee === me);
+      const lewat = saya.filter(ltOverdue);
+      const semak = t.filter((x) => x.reviewer === me && x.status === "PENDING_REVIEW");
+      lead = !LD.tasks ? "Memuatkan tugasan anda…" : "Anda ada <b>" + saya.length + " tugasan terbuka</b>, <b>" + terima.length + " perlu diterima</b>, <b>" + lewat.length + " lewat</b>" + (semak.length ? " dan <b>" + semak.length + " menunggu semakan anda</b>" : "") + ".";
+      if (LD.tasks && LD.tasks.bolehCipta) quick.push(btn("+ Tugasan Baharu", "lt-new", "primary"));
+      quick.push('<a class="btn" href="#tasks">Buka Tasks</a>');
+      const senarai = semak.concat(saya.filter((x) => !semak.includes(x))).slice(0, 6);
+      tugasanPanel = '<section class="panel" style="margin-top:16px">' + panelHead("Tugasan Saya", senarai.length + " perlu perhatian", routeLink("tasks", "Semua"), liveTagDev) +
+        (!LD.tasks ? '<p class="muted small" role="status">Memuatkan…</p>' : senarai.length ? '<ul class="live-list">' + senarai.map((x) => '<li><button type="button" class="text-link tnum" data-action="lt-notif" data-id="' + esc(x.task_id) + '">' + esc(x.task_id) + "</button><span>" + esc(x.title) + " · " + ltBadge(x) + '</span><span class="muted small">' + (x.reviewer === me && x.status === "PENDING_REVIEW" ? "Menunggu semakan anda" : "Tarikh akhir " + (x.due_date ? fmtDate(x.due_date) : "—")) + "</span></li>").join("") + "</ul>" : '<p class="muted small">Tiada tugasan yang perlu perhatian. 👍</p>') + "</section>";
+    }
+    quick.push('<a class="btn" href="#operations">Buka Operations</a>');
+    return '<section class="banner" aria-labelledby="welcome"><p class="banner-eyebrow">' + dayName + ", " + fmtDate(TODAY) + " · Sri Cheras Enterprise · " + esc(LIVE.roleLabel(u.role)) + (u.jawatan ? " · " + esc(u.jawatan) : "") + '</p><h1 id="welcome">' + greet + ", " + esc(u.nama || u.emel) + '</h1><p class="lead">' + lead + "</p>" +
+      '<div class="quick"><div class="quick-row">' + quick.join("") + "</div></div></section>" + tugasanPanel + '<div style="margin-top:16px">' + liveOpsSummary() + "</div>";
+  }
+  const viewDashboard = () => (LIVE_USER ? liveDashboard() : ({ executive: dashExecutive, management: dashManagement, pm: dashPm, staff: dashStaff, viewer: dashViewer }[POLICY.dashboard])());
 
   /* ========== Paparan: My Workspace ========== */
   function viewWorkspace() {
