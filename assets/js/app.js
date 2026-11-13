@@ -1887,11 +1887,11 @@
       $("#profile-avatar").textContent = nama.charAt(0);
       $("#profile-name").textContent = nama;
       $("#profile-role").textContent = LIVE.roleLabel(LIVE_USER.role) + (LIVE_USER.jawatan ? " · " + LIVE_USER.jawatan : "");
-      $("#profile-pop").innerHTML = '<button type="button" class="pop-link" data-action="lt-pw">Tukar password</button>' + (LIVE_USER.role === "SUPER_ADMIN" ? '<a href="#access" class="pop-link">Pengguna & Akses</a>' : "") + '<button type="button" class="pop-link" data-live-logout>Log keluar</button>';
+      $("#profile-pop").innerHTML = '<button type="button" class="pop-link" data-action="lt-pw">Tukar password</button>' + (LIVE_USER.role === "SUPER_ADMIN" ? '<a href="#access" class="pop-link">Pengguna & Akses</a>' : "") + '<button type="button" class="pop-link" data-live-logout>Log keluar</button>' + '<p class="pop-versi">SCE CENTRAL DEV · Versi ' + esc(LIVE.versi) + "</p>";
       $(".demo-pill").textContent = "DEV";
-      $(".demo-bar").innerHTML = "<strong>DEV</strong><span class=\"demo-bar-text\">Program dan DBKL: <b>data sebenar, baca sahaja</b>. Modul lain masih <b>data contoh</b> (persona " + esc(SESSION.role) + ").</span>" +
-        '<button type="button" class="link-btn" data-live-logout>Log keluar</button>';
-      $("#sidebar-foot").innerHTML = "Persekitaran DEV<br>Backend DEV baca sahaja.";
+      // Bar DEV kuning hanya untuk mod pratonton (?demo=1). Label DEV di topbar sudah memadai.
+      $(".demo-bar").hidden = true;
+      $("#sidebar-foot").innerHTML = "SCE CENTRAL DEV<br>Versi " + esc(LIVE.versi);
       return;
     }
     $("#profile-avatar").textContent = me.charAt(0);

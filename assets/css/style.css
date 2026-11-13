@@ -452,3 +452,4 @@ button.pop-link { width: 100%; text-align: left; background: none; border: 0; fo
 .live-list li > .muted { grid-column: 2; }
 
 .temp-pw { margin: var(--s4) 0; padding: var(--s4); border-radius: var(--r-sm); background: var(--surface-sunk); font-size: 24px; font-weight: 700; letter-spacing: .08em; text-align: center; user-select: all; }
+.pop-versi { margin: 4px 0 0; padding: 8px 12px 4px; border-top: 1px solid var(--border); color: var(--text-3); font-size: var(--fs-micro); }
