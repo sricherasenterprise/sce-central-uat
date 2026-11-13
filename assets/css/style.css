@@ -453,3 +453,59 @@ button.pop-link { width: 100%; text-align: left; background: none; border: 0; fo
 
 .temp-pw { margin: var(--s4) 0; padding: var(--s4); border-radius: var(--r-sm); background: var(--surface-sunk); font-size: 24px; font-weight: 700; letter-spacing: .08em; text-align: center; user-select: all; }
 .pop-versi { margin: 4px 0 0; padding: 8px 12px 4px; border-top: 1px solid var(--border); color: var(--text-3); font-size: var(--fs-micro); }
+
+/* ===== Slip Gaji ===== */
+.gj-bahagian { margin-top: var(--s5); border-top: 1px solid var(--border); padding-top: var(--s3); }
+.gj-bahagian-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--s2); }
+.gj-bahagian-head h3 { font-size: var(--fs-section); }
+.gj-bahagian-head span { font-weight: 700; font-variant-numeric: tabular-nums; }
+.gj-baris { display: flex; gap: var(--s2); align-items: center; margin-bottom: 6px; }
+.gj-baris input { min-height: 38px; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); }
+.gj-baris [data-f="label"] { flex: 1 1 auto; min-width: 0; }
+.gj-baris .gj-kecil { width: 84px; flex: none; }
+.gj-baris .gj-amaun { width: 120px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
+.gj-tambah { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; margin-top: 4px; }
+.gj-tambah select { max-width: 100%; }
+.gj-ringkasan { display: flex; flex-wrap: wrap; gap: var(--s6); margin-top: var(--s5); padding: var(--s4); border-radius: var(--r-sm); background: var(--teal-tint); }
+.gj-ringkasan div { display: flex; flex-direction: column; }
+.gj-ringkasan b { font-size: 20px; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .gj-baris { flex-wrap: wrap; } .gj-baris [data-f="label"] { flex-basis: 100%; } .gj-baris .gj-amaun { flex: 1; } }
+
+/* Slip (pratonton + cetak), ikut format Sri Cheras Enterprise */
+.slip-pratonton { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-sm); padding: 12px; background: #fff; }
+.slip { width: 760px; color: #000; font: 13px/1.35 Arial, Helvetica, sans-serif; background: #fff; }
+.slip-kepala { display: flex; justify-content: space-between; align-items: flex-start; }
+.slip-kepala h1 { margin: 0; color: #8B3E0E; font: 700 38px/1 Arial, Helvetica, sans-serif; letter-spacing: .5px; }
+.slip-daftar { color: #8B3E0E; font-size: 12px; padding-top: 4px; }
+.slip-alamat { margin: 4px 0 18px; color: #8B3E0E; font-size: 12px; }
+.slip-pekerja { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.slip-pekerja p { margin: 12px 0 0; }
+.slip-info { border-collapse: collapse; min-width: 430px; }
+.slip-info td { padding: 0 4px; }
+.slip-info td:last-child { text-align: right; }
+.slip-info tr.hl td { background: #FCDFC9; }
+.slip-komponen { width: 100%; border-collapse: collapse; }
+.slip-komponen th { background: #C0500A; color: #fff; padding: 8px; font-weight: 700; }
+.slip-komponen th:first-child { text-align: center; width: 60%; }
+.slip-komponen td { padding: 1px 4px; }
+.slip-komponen td.c { text-align: center; }
+.slip-komponen td.rm { text-align: right; white-space: nowrap; }
+.slip-komponen td.rm span { float: left; padding-left: 8px; }
+.slip-komponen tr.sec td { padding-top: 6px; }
+.slip-komponen tr.sub td { background: #FCDFC9; font-weight: 700; }
+.slip-bank { width: 100%; margin-top: 22px; border-collapse: collapse; }
+.slip-bank th { text-align: left; text-decoration: underline; padding: 2px 4px; }
+.slip-bank th:nth-child(2), .slip-bank td:nth-child(2) { text-align: center; }
+.slip-bank td { padding: 2px 4px; }
+.slip-draf { margin-top: 16px; color: #AE2A20; font-weight: 700; text-align: center; letter-spacing: 2px; }
+#print-area { display: none; }
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body { background: #fff !important; }
+  body > *:not(#print-area) { display: none !important; }
+  #print-area { display: block !important; }
+  #print-area .slip { width: 100%; }
+  .slip-komponen th, .slip-komponen tr.sub td, .slip-info tr.hl td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.modal.modal-slip { width: min(860px, 96vw); max-width: none; }
+.modal.modal-slip .slip-pratonton { padding: 16px; }

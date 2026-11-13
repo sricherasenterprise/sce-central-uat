@@ -234,7 +234,7 @@
   const LIVE_TIADA_CAP = ["finance.", "dbkl.", "program."]; // kewangan ditangguh; Program dan DBKL kini data sebenar baca sahaja
   const can = (cap) => POLICY.caps.includes(cap) && !(LIVE_USER && LIVE_TIADA_CAP.some((p) => cap.indexOf(p) === 0));
   Object.keys(PERMISSIONS).forEach((k) => { const r = PERMISSIONS[k].routes; if ((r.includes("programs") || r.includes("dbkl")) && !r.includes("operations")) r.push("operations"); });
-  const canRoute = (r) => POLICY.routes.includes(r) && !(LIVE_USER && r === "finance");
+  const canRoute = (r) => (r === "payroll" ? !!(LIVE_USER && LIVE_USER.payroll) : POLICY.routes.includes(r) && !(LIVE_USER && r === "finance"));
   const me = SESSION.name;
   let F = null; // data kewangan: kekal null bagi role tanpa finance.view
 
@@ -295,6 +295,7 @@
     close: '<path d="M6 6l12 12M18 6 6 18"/>'
   };
   ICON.operations = ICON.dbkl || ICON.programs;
+  ICON.payroll = ICON.finance;
   const icon = (n) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + "</svg>";
 
   function panelHead(title, sub, action, tag) {
@@ -930,7 +931,7 @@
     LIVE.api(SUMBER[kind][0])
       .then((o) => { LD[kind] = SUMBER[kind][1] ? o[SUMBER[kind][1]] : o; LD.at[kind] = o.dikemasKini; LD.err[kind] = null; })
       .catch((e) => { LD.err[kind] = e.code === "TIADA_KEBENARAN" ? "Akaun anda tiada kebenaran untuk data ini." : (e.message || "Ralat memuatkan data."); })
-      .finally(() => { LD.busy[kind] = false; if (kind === "notif") renderNotifs(); else if (["programs", "dbkl", "operations", "dashboard", "tasks"].includes(currentRoute())) refresh(); });
+      .finally(() => { LD.busy[kind] = false; if (kind === "notif") renderNotifs(); else if (["programs", "dbkl", "operations", "dashboard", "tasks", "payroll"].includes(currentRoute())) refresh(); });
   }
   const liveTag = '<span class="live-tag">Data sebenar · baca sahaja</span>';
   const liveTagDev = '<span class="live-tag">Data sebenar DEV</span>'; // Tasks dan notifikasi: boleh ditulis, dalam SCE-DEV-TASKS
@@ -1175,6 +1176,185 @@
     ["Login dan sesi", "Belum wujud", "Pemilih DEV DEMO ONLY sahaja. Tiada pengesahan identiti."],
     ["Penguatkuasaan backend", "Belum disambung", "Semua kawalan di atas mesti dilaksanakan semula di API / Apps Script sebelum data sebenar digunakan."]
   ];
+  /* ========== Slip Gaji (mod LIVE; SA, MG, kebenaran PAYROLL) ========== */
+  const GJ = { cfg: null, slip: null, err: null, busy: false, edit: null };
+  const GJ_BAHAGIAN = [["elaun", "Gaji dan Elaun"], ["bonus", "Bonus Pengendalian Majlis"], ["tuntutan", "Tuntutan"], ["potongan", "Potongan"]];
+  const gjSen = (v) => { const s = String(v == null ? "" : v).replace(/[,\s]|RM/gi, ""); if (!s || s === "-") return 0; if (!/^\d+(\.\d{1,2})?$/.test(s)) return NaN; const [r, p] = s.split("."); return Number(r) * 100 + Number(((p || "") + "00").slice(0, 2)); };
+  const gjRM = (sen) => { if (!sen) return "-"; const n = Math.abs(sen); return (sen < 0 ? "-" : "") + String(Math.floor(n / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + String(n % 100).padStart(2, "0"); };
+  const gjBulanLabel = (b) => { const [y, m] = String(b || "").split("-"); return m ? MONTHS_FULL[+m - 1] + " " + y : "—"; };
+  function gjLoad() {
+    if (GJ.busy) return; GJ.busy = true;
+    Promise.all([LIVE.api("payroll.config"), LIVE.api("payroll.slip.list")])
+      .then(([c, l]) => { GJ.cfg = c; GJ.slip = l.slip; GJ.err = null; })
+      .catch((e) => { GJ.err = e.message; })
+      .finally(() => { GJ.busy = false; if (currentRoute() === "payroll") refresh(); });
+  }
+  function gjReload() { GJ.cfg = null; GJ.slip = null; gjLoad(); refresh(); }
+
+  function viewPayroll() {
+    const head = (extra) => pageHead("Slip Gaji", "Sediakan dan cetak slip gaji mengikut format Sri Cheras Enterprise. Data sulit: hanya pengguna dibenarkan.", (extra || "") + " " + liveTagDev);
+    if (GJ.err) return head() + '<section class="panel"><div class="empty"><p>' + esc(GJ.err) + '</p><button type="button" class="btn" data-action="gj-reload">Cuba lagi</button></div></section>';
+    if (!GJ.cfg || (!GJ.slip && !GJ.edit)) { gjLoad(); return head() + '<section class="panel"><div class="empty" role="status"><p>Memuatkan…</p></div></section>'; }
+    if (GJ.edit) return gjEditor();
+    const tabs = [["slip", "Slip"], ["pekerja", "Pekerja"]];
+    if (!tabs.some(([v]) => v === f("gj.tab"))) state.filters["gj.tab"] = "slip";
+    if (f("gj.tab") === "pekerja") {
+      const p = GJ.cfg.pekerja;
+      return head(btn("+ Pekerja Baharu", "gj-pekerja", "primary")) + '<div class="toolbar">' + chips("gj.tab", tabs) + "</div>" +
+        '<section class="panel">' + panelHead("Pekerja", p.length + " aktif", "", liveTagDev) + table([
+          { h: "ID", r: (x) => '<span class="tnum">' + esc(x.pekerja_id) + "</span>" }, { h: "Nama", r: (x) => esc(x.nama) }, { h: "Jawatan", r: (x) => esc(x.jawatan || "—") },
+          { h: "No. KP", r: (x) => '<span class="tnum">' + esc(x.no_kp ? "********" + x.no_kp.slice(-4) : "—") + "</span>" },
+          { h: "Bank", r: (x) => esc((x.bank || "—") + (x.no_akaun ? " · ****" + x.no_akaun.slice(-4) : "")) },
+          { h: "Tindakan", r: (x) => btn("Kemas Kini", "gj-pekerja", "small", ' data-id="' + esc(x.pekerja_id) + '"') }
+        ], p, empty("Belum ada pekerja. Tambah pekerja dahulu sebelum menyediakan slip.")) + "</section>";
+    }
+    const b = f("gj.bulan");
+    const list = GJ.slip.filter((x) => !b || x.bulan === b);
+    const bulanSedia = unique(GJ.slip.map((x) => x.bulan)).sort().reverse();
+    return head(GJ.cfg.pekerja.length ? btn("+ Slip Baharu", "gj-baru", "primary") : "") + '<div class="toolbar">' + chips("gj.tab", tabs) +
+      filterSelect("gj.bulan", "Bulan", [["", "Semua bulan"]].concat(bulanSedia.map((x) => [x, gjBulanLabel(x)]))) + "</div>" +
+      '<section class="panel">' + panelHead("Slip Gaji", list.length + " slip", "", liveTagDev) + table([
+        { h: "ID", r: (x) => '<span class="tnum">' + esc(x.slip_id) + "</span>" }, { h: "Pekerja", r: (x) => esc(x.nama) }, { h: "Bulan", r: (x) => esc(gjBulanLabel(x.bulan)) },
+        { h: "Gaji Kasar", num: true, r: (x) => "RM " + gjRM(x.gaji_kasar_sen) }, { h: "Gaji Bersih", num: true, r: (x) => "<b>RM " + gjRM(x.gaji_bersih_sen) + "</b>" },
+        { h: "Status", r: (x) => '<span class="badge ' + (x.status === "MUKTAMAD" ? "good" : "warn") + '">' + esc(x.status === "MUKTAMAD" ? "Muktamad" : "Draf") + "</span>" },
+        { h: "Tindakan", r: (x) => btn("Buka", "gj-buka", "small", ' data-id="' + esc(x.slip_id) + '"') }
+      ], list, empty(GJ.cfg.pekerja.length ? "Belum ada slip. Klik + Slip Baharu." : "Tambah pekerja dahulu (tab Pekerja).")) + "</section>";
+  }
+
+  function gjPekerjaForm(id) {
+    const p = id ? GJ.cfg.pekerja.find((x) => x.pekerja_id === id) : {};
+    openForm({ live: true, title: id ? "Kemas Kini Pekerja: " + p.nama : "Pekerja Baharu", submit: "Simpan", intro: note("Maklumat sulit. Digunakan untuk slip gaji sahaja."), fields: [
+      { name: "nama", label: "Nama penuh", required: true, maxlength: 150, full: true, value: p.nama },
+      { name: "alamat", label: "Alamat", type: "textarea", full: true, maxlength: 400, value: p.alamat },
+      { name: "jantina", label: "Jantina", type: "select", options: ["Lelaki", "Perempuan"], value: p.jantina || "Lelaki" },
+      { name: "no_kp", label: "No. Kad Pengenalan", maxlength: 14, value: p.no_kp, help: "12 digit, tanpa sengkang" },
+      { name: "jawatan", label: "Jawatan", maxlength: 100, value: p.jawatan },
+      { name: "bank", label: "Bank", maxlength: 60, value: p.bank },
+      { name: "no_akaun", label: "No. Akaun", maxlength: 24, value: p.no_akaun }
+    ], onSubmit: async (d) => { try { await LIVE.api("payroll.pekerja.save", { pekerja_id: id || "", data: d }); toast("Pekerja disimpan."); } catch (e) { toast(e.message); } gjReload(); } });
+  }
+
+  function gjTarikhLalai(bulan) {
+    const [y, m] = bulan.split("-").map(Number);
+    const akhir = new Date(Date.UTC(y, m, 0)).getUTCDate(), nx = new Date(Date.UTC(y, m, 1));
+    return { tempoh_mula: bulan + "-01", tempoh_tamat: bulan + "-" + String(akhir).padStart(2, "0"), tarikh_gaji: nx.toISOString().slice(0, 10) };
+  }
+  function gjBaru() {
+    const d = new Date(TODAY + "T00:00:00Z"); d.setUTCMonth(d.getUTCMonth() - 1);
+    const bulan = d.toISOString().slice(0, 7), L = GJ.cfg.itemLalai;
+    GJ.edit = Object.assign({ slip_id: "", version: "", pekerja_id: GJ.cfg.pekerja[0].pekerja_id, bulan: bulan, status: "DRAF",
+      item: { elaun: L.elaun.map((l) => ({ label: l, amaun: "" })), bonus: [], tuntutan: L.tuntutan.map((l) => ({ label: l, amaun: "" })), potongan: L.potongan.map((l) => ({ label: l, amaun: "" })) } }, gjTarikhLalai(bulan));
+    refresh();
+  }
+  async function gjBuka(id) {
+    try {
+      const o = await LIVE.api("payroll.slip.get", { slip_id: id });
+      const s = o.slip, item = {};
+      GJ_BAHAGIAN.forEach(([k]) => { item[k] = (s.item[k] || []).map((x) => ({ label: x.label, unit: x.unit, kadar: x.kadar, program: x.program, amaun: x.amaun_sen ? (x.amaun_sen / 100).toFixed(2) : "" })); });
+      GJ.edit = { slip_id: s.slip_id, version: s.version, status: s.status, pekerja_id: s.pekerja_id, bulan: s.bulan, tempoh_mula: s.tempoh_mula, tempoh_tamat: s.tempoh_tamat, tarikh_gaji: s.tarikh_gaji, item: item, pekerjaSnap: s.pekerja };
+      refresh();
+    } catch (e) { toast(e.message); }
+  }
+  // Baca nilai borang editor ke dalam GJ.edit (tanpa refresh, supaya fokus tidak hilang semasa menaip).
+  function gjBacaBorang() {
+    const el = document.getElementById("slip-editor"); if (!el || !GJ.edit) return;
+    ["pekerja_id", "bulan", "tempoh_mula", "tempoh_tamat", "tarikh_gaji"].forEach((k) => { const i = el.querySelector('[name="' + k + '"]'); if (i) GJ.edit[k] = i.value; });
+    GJ_BAHAGIAN.forEach(([k]) => {
+      GJ.edit.item[k] = [...el.querySelectorAll('[data-bahagian="' + k + '"] .gj-baris')].map((r) => ({
+        label: r.querySelector('[data-f="label"]').value, unit: (r.querySelector('[data-f="unit"]') || {}).value || "", kadar: (r.querySelector('[data-f="kadar"]') || {}).value || "",
+        amaun: r.querySelector('[data-f="amaun"]').value, program: r.dataset.program || "" }));
+    });
+  }
+  function gjJumlah(e) {
+    const j = {}; let sah = true;
+    GJ_BAHAGIAN.forEach(([k]) => { j[k] = e.item[k].reduce((t, x) => { const v = gjSen(x.amaun); if (isNaN(v)) { sah = false; return t; } return t + v; }, 0); });
+    return { j: j, kasar: j.elaun, bersih: j.elaun + j.bonus + j.tuntutan - j.potongan, sah: sah };
+  }
+  function gjKemasJumlah() {
+    gjBacaBorang(); const t = gjJumlah(GJ.edit), el = document.getElementById("slip-editor"); if (!el) return;
+    GJ_BAHAGIAN.forEach(([k]) => { const s = el.querySelector('[data-jumlah="' + k + '"]'); if (s) s.textContent = "RM " + gjRM(t.j[k]); });
+    el.querySelector("[data-jumlah=kasar]").textContent = "RM " + gjRM(t.kasar);
+    el.querySelector("[data-jumlah=bersih]").textContent = "RM " + gjRM(t.bersih);
+    el.querySelector("[data-jumlah=amaran]").hidden = t.sah;
+  }
+  function gjEditor() {
+    const e = GJ.edit, kunci = e.status === "MUKTAMAD", dis = kunci ? " disabled" : "", t = gjJumlah(e);
+    const pek = GJ.cfg.pekerja.map((p) => [p.pekerja_id, p.nama]);
+    if (e.pekerja_id && !pek.some(([v]) => v === e.pekerja_id) && e.pekerjaSnap) pek.push([e.pekerja_id, e.pekerjaSnap.nama + " (tidak aktif)"]);
+    const inp = (n, l, type, v, extra) => '<label class="field"><span>' + esc(l) + '</span><input name="' + n + '" type="' + type + '" value="' + esc(v || "") + '"' + dis + (extra || "") + "></label>";
+    const program = (LD.program || []).filter((p) => p.tarikh && p.tarikh.slice(0, 7) === e.bulan && p.tahap.event === "siap");
+    if (!LD.program && !LD.err.program) liveLoad("program");
+    const bahagian = GJ_BAHAGIAN.map(([k, label]) => '<div class="gj-bahagian" data-bahagian="' + k + '"><div class="gj-bahagian-head"><h3>' + esc(label) + "</h3><span data-jumlah=\"" + k + '">RM ' + gjRM(t.j[k]) + "</span></div>" +
+      e.item[k].map((x, i) => '<div class="gj-baris" data-program="' + esc(x.program || "") + '"><input data-f="label" placeholder="Keterangan" value="' + esc(x.label) + '"' + dis + ' aria-label="Keterangan">' +
+        (k === "tuntutan" || k === "elaun" ? '<input data-f="unit" class="gj-kecil" placeholder="Jam/Unit" value="' + esc(x.unit || "") + '"' + dis + ' aria-label="Jam atau unit"><input data-f="kadar" class="gj-kecil" placeholder="Kadar" value="' + esc(x.kadar || "") + '"' + dis + ' aria-label="Kadar">' : "") +
+        '<input data-f="amaun" class="gj-amaun" inputmode="decimal" placeholder="0.00" value="' + esc(x.amaun) + '"' + dis + ' aria-label="Amaun (RM)">' +
+        (kunci ? "" : '<button type="button" class="icon-btn" data-action="gj-buang" data-k="' + k + '" data-i="' + i + '" aria-label="Buang baris">✕</button>') + "</div>").join("") +
+      (kunci ? "" : '<div class="gj-tambah">' + btn("+ Baris", "gj-tambah", "small", ' data-k="' + k + '"') +
+        (k === "bonus" ? (program.length ? '<select class="inline-select" data-gj-program aria-label="Tambah dari program"><option value="">+ Tambah dari program ' + esc(gjBulanLabel(e.bulan)) + "…</option>" + program.map((p) => '<option value="' + esc(p.kunci) + '">' + esc(fmtDate(p.tarikh) + " · " + p.jenis + " · " + p.tetuan) + "</option>").join("") + "</select>" : '<span class="small muted">Tiada program selesai pada ' + esc(gjBulanLabel(e.bulan)) + " dalam rekod.</span>") : "") + "</div>") + "</div>").join("");
+    return pageHead(e.slip_id ? "Slip " + e.slip_id : "Slip Gaji Baharu", kunci ? "Slip ini sudah dimuktamadkan dan dikunci." : "Isi amaun dalam RM. Biarkan kosong untuk paparan '-'.", liveTagDev) +
+      '<section class="panel" id="slip-editor">' +
+        '<div class="form-grid">' +
+          '<label class="field"><span>Pekerja</span><select name="pekerja_id" class="inline-select"' + dis + ">" + pek.map(([v, l]) => '<option value="' + esc(v) + '"' + (v === e.pekerja_id ? " selected" : "") + ">" + esc(l) + "</option>").join("") + "</select></label>" +
+          inp("bulan", "Bulan gaji", "month", e.bulan, ' data-gj-bulan') + inp("tempoh_mula", "Tempoh mula", "date", e.tempoh_mula) + inp("tempoh_tamat", "Tempoh tamat", "date", e.tempoh_tamat) + inp("tarikh_gaji", "Tarikh gaji", "date", e.tarikh_gaji) +
+        "</div>" + bahagian +
+        '<div class="gj-ringkasan"><div><span>Gaji Kasar</span><b data-jumlah="kasar">RM ' + gjRM(t.kasar) + '</b></div><div><span>Gaji Bersih</span><b data-jumlah="bersih">RM ' + gjRM(t.bersih) + "</b></div>" +
+          '<p class="small" data-jumlah="amaran" style="color:var(--bad)"' + (t.sah ? " hidden" : "") + ">Ada amaun tidak sah (guna format 1234.50).</p></div>" +
+        '<div class="row-actions" style="margin-top:16px">' + btn("← Kembali", "gj-tutup") + (kunci ? "" : btn("Simpan Draf", "gj-simpan", "primary")) +
+          (e.slip_id ? btn("Pratonton & Cetak", "gj-cetak") : "") + (e.slip_id && !kunci ? btn("Muktamadkan", "gj-muktamad") : "") +
+          (e.slip_id && kunci && ["SUPER_ADMIN", "MANAGEMENT"].includes(LIVE_USER.role) ? btn("Buka Semula", "gj-bukasemula") : "") + "</div>" +
+      "</section>";
+  }
+  async function gjSimpan() {
+    gjBacaBorang(); const e = GJ.edit;
+    const data = { pekerja_id: e.pekerja_id, bulan: e.bulan, tempoh_mula: e.tempoh_mula, tempoh_tamat: e.tempoh_tamat, tarikh_gaji: e.tarikh_gaji, item: e.item };
+    try { const o = await LIVE.api("payroll.slip.save", { slip_id: e.slip_id, version: e.version, data: data }); toast("Slip disimpan."); GJ.slip = null; await gjBuka(o.slip_id); gjLoad(); }
+    catch (x) { toast(x.message); }
+  }
+  async function gjStatus(ke, sebab) {
+    const e = GJ.edit;
+    try { await LIVE.api("payroll.slip.status", { slip_id: e.slip_id, version: e.version, status: ke, sebab: sebab || "" }); toast(ke === "MUKTAMAD" ? "Slip dimuktamadkan." : "Slip dibuka semula."); await gjBuka(e.slip_id); GJ.slip = null; gjLoad(); }
+    catch (x) { toast(x.message); }
+  }
+  async function gjCetak() {
+    let o; try { o = await LIVE.api("payroll.slip.get", { slip_id: GJ.edit.slip_id }); } catch (x) { toast(x.message); return; }
+    const s = o.slip, c = o.syarikat, p = s.pekerja || {}, fd = (d) => (d ? fmtDate(d) : "—");
+    const rows = GJ_BAHAGIAN.map(([k, label]) => {
+      const it = s.item[k] || [];
+      const isi = k === "bonus" ? (it.length ? '<tr><td colspan="4">Communication Strategy / Sesi Libat Urus:</td></tr>' + it.map((x, i) => '<tr><td>' + (i + 1) + ". " + esc(x.label) + '</td><td></td><td></td><td class="rm"><span>RM</span>' + gjRM(x.amaun_sen) + "</td></tr>").join("") : "")
+        : it.map((x, i) => "<tr><td>" + (k === "tuntutan" ? (i + 1) + ". " : "") + esc(x.label) + '</td><td class="c">' + esc(x.unit || "") + '</td><td class="c">' + esc(x.kadar || "") + '</td><td class="rm"><span>RM</span>' + gjRM(x.amaun_sen) + "</td></tr>").join("");
+      return '<tr class="sec"><td colspan="4"><u><b>' + esc(label) + "</b></u></td></tr>" + isi + '<tr class="sub"><td colspan="3"></td><td class="rm"><span>RM</span>' + gjRM((s.jumlah || {})[k] || 0) + "</td></tr>";
+    }).join("");
+    const html = '<div class="slip">' +
+      '<div class="slip-kepala"><div><h1>' + esc(c.nama) + '</h1></div><div class="slip-daftar">' + esc(c.noDaftar) + "<br>" + esc(c.tin) + "</div></div>" +
+      '<p class="slip-alamat"><b>Alamat:</b> ' + esc(c.alamat) + "<br><b>" + esc(c.telefon.split(",")[0]) + "</b>" + esc(c.telefon.indexOf(",") > 0 ? "," + c.telefon.split(",").slice(1).join(",") : "") + " &nbsp;|&nbsp; <b>Emel:</b> " + esc(c.emel) + "</p>" +
+      '<div class="slip-pekerja"><div><b>' + esc(p.nama) + '</b><p>' + esc(p.alamat || "").replace(/\n/g, "<br>") + '</p></div><table class="slip-info">' +
+        [["Tempoh mula", fd(s.tempoh_mula)], ["Tempoh tamat", fd(s.tempoh_tamat)], ["Tarikh gaji", fd(s.tarikh_gaji)], ["Jantina", p.jantina], ["No.Kad Pengenalan", p.no_kp]].map(([k, v]) => '<tr class="hl"><td>' + esc(k) + "</td><td>:</td><td>" + esc(v || "—") + "</td></tr>").join("") +
+        [["Jawatan", p.jawatan], ["Gaji Kasar", "RM " + gjRM(s.gaji_kasar_sen)], ["Gaji Bersih", "RM " + gjRM(s.gaji_bersih_sen)]].map(([k, v]) => "<tr><td>" + esc(k) + "</td><td>:</td><td>" + esc(v || "—") + "</td></tr>").join("") +
+      "</table></div>" +
+      '<table class="slip-komponen"><thead><tr><th>KOMPONEN SLIP GAJI</th><th>JAM/UNIT</th><th>KADAR</th><th>BAYARAN</th></tr></thead><tbody>' + rows + "</tbody></table>" +
+      '<table class="slip-bank"><tr><th>Maklumat Bank</th><th>No. Akaun</th><th>Bayaran Gaji</th></tr><tr><td>' + esc(p.nama) + (p.bank ? " (" + esc(p.bank) + ")" : "") + "</td><td>" + esc(p.no_akaun || "—") + "</td><td>RM " + gjRM(s.gaji_bersih_sen) + "</td></tr></table>" +
+      (s.status !== "MUKTAMAD" ? '<p class="slip-draf">DRAF: belum dimuktamadkan</p>' : "") +
+    "</div>";
+    let area = document.getElementById("print-area");
+    if (!area) { area = document.createElement("div"); area.id = "print-area"; document.body.appendChild(area); }
+    area.innerHTML = html;
+    openInfo({ title: "Pratonton: " + s.slip_id, body: '<div class="slip-pratonton">' + html + "</div>" + note("Klik Cetak, kemudian pilih 'Save as PDF' sebagai pencetak untuk simpan PDF. Nama fail cadangan: SLIP GAJI " + gjBulanLabel(s.bulan).toUpperCase() + " - " + String(p.nama || "").toUpperCase()), actions: btn("Cetak / Simpan PDF", "gj-print", "primary") });
+    modal.classList.add("modal-slip");
+    modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true });
+  }
+
+  document.addEventListener("input", (ev) => { if (GJ.edit && ev.target.closest("#slip-editor")) gjKemasJumlah(); });
+  document.addEventListener("change", (ev) => {
+    if (!GJ.edit) return;
+    if (ev.target.matches("[data-gj-bulan]") && /^[0-9]{4}-[0-9]{2}$/.test(ev.target.value)) { gjBacaBorang(); Object.assign(GJ.edit, gjTarikhLalai(ev.target.value)); refresh(); return; }
+    if (ev.target.matches("[data-gj-program]") && ev.target.value) {
+      const p = (LD.program || []).find((x) => x.kunci === ev.target.value);
+      gjBacaBorang();
+      if (p && !GJ.edit.item.bonus.some((x) => x.program === p.kunci)) GJ.edit.item.bonus.push({ label: fmtDate(p.tarikh) + " - " + p.tetuan, amaun: "", program: p.kunci });
+      refresh();
+    }
+  });
+
   /* ========== Pengguna & password (mod LIVE) ========== */
   function liveChangePassword() {
     openForm({ live: true, title: "Tukar Password", submit: "Tukar Password", intro: note("Minimum 10 aksara, dengan huruf dan nombor. Sesi lain akan dilog keluar."), fields: [
@@ -1301,7 +1481,7 @@
     return '<div class="toolbar ops-tabs" aria-label="Kategori operasi">' + chips("ops.tab", tabs) + "</div>" + (f("ops.tab") === "dbkl" ? viewDbkl() : viewPrograms());
   }
   const NAV = [
-    ["Modul", [["dashboard", "Dashboard", viewDashboard], ["projects", "Projects", viewProjects], ["tasks", "Tasks", viewTasks], ["operations", "Operations", viewOperations], ["finance", "Finance", viewFinance], ["documents", "Documents", viewDocuments]]],
+    ["Modul", [["dashboard", "Dashboard", viewDashboard], ["projects", "Projects", viewProjects], ["tasks", "Tasks", viewTasks], ["operations", "Operations", viewOperations], ["finance", "Finance", viewFinance], ["documents", "Documents", viewDocuments], ["payroll", "Slip Gaji", viewPayroll]]],
     ["Tetapan", [["access", "Pengguna & Akses", viewAccess], ["staff", "Direktori Staf", viewStaff], ["settings", "Tetapan Sistem", viewSettings]]]
   ];
   const NAV_SOROK = ["finance"];
@@ -1488,6 +1668,18 @@
     "live-detail"(el) { openLiveDetail(el.dataset.kunci); },
     "live-order"(el) { openLiveOrder(el.dataset.id); },
     "lt-new"() { liveTaskNew(); },
+    "gj-reload"() { gjReload(); },
+    "gj-pekerja"(el) { gjPekerjaForm(el.dataset.id || ""); },
+    "gj-baru"() { gjBaru(); },
+    "gj-buka"(el) { gjBuka(el.dataset.id); },
+    "gj-tutup"() { GJ.edit = null; refresh(); },
+    "gj-tambah"(el) { gjBacaBorang(); GJ.edit.item[el.dataset.k].push({ label: "", amaun: "" }); refresh(); },
+    "gj-buang"(el) { gjBacaBorang(); GJ.edit.item[el.dataset.k].splice(+el.dataset.i, 1); refresh(); },
+    "gj-simpan"() { gjSimpan(); },
+    "gj-cetak"() { gjCetak(); },
+    "gj-print"() { const t = document.title, n = document.querySelector("#modal .note"); const m = n && /Nama fail cadangan: (.*)$/.exec(n.textContent); if (m) document.title = m[1]; window.print(); document.title = t; },
+    "gj-muktamad"() { openForm({ live: true, title: "Muktamadkan " + GJ.edit.slip_id, submit: "Muktamadkan", intro: note("Slip akan dikunci. Hanya SUPER ADMIN atau MANAGEMENT boleh membukanya semula."), fields: [{ name: "ok", label: "Saya telah menyemak semua amaun", type: "confirm", required: true }], onSubmit: () => gjStatus("MUKTAMAD") }); },
+    "gj-bukasemula"() { openForm({ live: true, title: "Buka Semula " + GJ.edit.slip_id, submit: "Buka Semula", fields: [{ name: "sebab", label: "Sebab", type: "textarea", required: true, full: true, maxlength: 300 }], onSubmit: (d) => gjStatus("DRAF", d.sebab) }); },
     "lt-pw"() { closePops(); liveChangePassword(); },
     "lt-reset"(el) { liveResetPassword(el.dataset.emel, el.dataset.nama); },
     async "lt-read-all"() { try { await LIVE.api("notifications.read"); } catch (e) { toast(e.message); } LD.notif = null; liveLoad("notif"); },
@@ -1910,6 +2102,8 @@
     $("#menu-btn").innerHTML = icon("menu");
     renderIdentity();
     render(true);
+    // Segar semula profil (role, jawatan, kebenaran PAYROLL) di latar; muat semula jika berubah.
+    if (LIVE_USER) LIVE.api("auth.me").then((m) => { const a = LIVE_USER, b = m.user; if (a.role !== b.role || a.nama !== b.nama || a.jawatan !== b.jawatan || !!a.payroll !== !!b.payroll) { LIVE.setUser(b); location.reload(); } }).catch(() => { /* api() mengurus sesi tamat */ });
     // Pautan dari emel: ?tugasan=SCE-TSK-... membuka butiran tugasan (selepas log masuk).
     const dariEmel = LIVE_USER && new URLSearchParams(location.search).get("tugasan");
     if (dariEmel && /^SCE-TSK-[0-9]{4}-[0-9]{4}$/.test(dariEmel)) {
