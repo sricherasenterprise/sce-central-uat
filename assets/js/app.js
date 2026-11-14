@@ -1493,12 +1493,13 @@
     const pct = Number(e.untungPeratus || 0); if (isNaN(pct)) sah = false;
     const untung = Math.round(kasar * (pct || 0) / 100), pot = qtSen(e.potongan), cuk = qtSen(e.cukai), lain = qtSen(e.lainLain);
     if ([pot, cuk, lain].some(isNaN)) sah = false;
-    return { baris, kasar, untung, jumlah: kasar + untung, besar: kasar + untung - (pot || 0) + (cuk || 0) + (lain || 0), sah };
+    return { baris, kasar, untung, pct: pct || 0, pot: pot || 0, cuk: cuk || 0, lain: lain || 0, jumlah: kasar + untung, besar: kasar + untung - (pot || 0) + (cuk || 0) + (lain || 0), sah };
   }
   function qtKemasJumlah() {
     qtBaca(); const k = qtKira(QT.edit), el = document.getElementById("quo-editor"); if (!el) return;
     el.querySelectorAll(".qt-bahagian").forEach((b, bi) => b.querySelectorAll(".qt-item").forEach((r, ii) => { r.querySelector("[data-jumlah]").textContent = qtRM(k.baris[bi][ii]); }));
-    [["kasar", k.kasar], ["untung", k.untung], ["jumlah", k.jumlah], ["besar", k.besar]].forEach(([n, v]) => { el.querySelector('[data-t="' + n + '"]').textContent = "RM " + qtRM(v); });
+    [["kasar", k.kasar], ["untung", k.untung], ["jumlah", k.jumlah], ["pot", k.pot], ["cuk", k.cuk], ["lain", k.lain], ["besar", k.besar]].forEach(([n, v]) => { const x = el.querySelector('[data-t="' + n + '"]'); if (x) { x.textContent = "RM " + qtRM(v); x.closest(".qt-r").classList.toggle("sifar", !v && ["pot", "cuk", "lain"].includes(n)); } });
+    const p = el.querySelector('[data-t="pct"]'); if (p) p.textContent = String(k.pct);
     el.querySelector("[data-t=amaran]").hidden = k.sah;
   }
   const qtNorm = (t) => String(t || "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -1513,6 +1514,8 @@
     const ada = e.bahagian[bi].item.map((x) => qtNorm(x.perkara));
     return tb.item.map((x, i) => ({ i: i, perkara: x.perkara })).filter((x) => ada.indexOf(qtNorm(x.perkara)) < 0);
   }
+  // Satu baris resit: tanda, label, nilai (diselaraskan kanan).
+  const qtR = (op, label, key, v, kelas) => '<div class="qt-r' + (kelas ? " " + kelas : "") + (!v && ["pot", "cuk", "lain"].includes(key) ? " sifar" : "") + '"><span class="qt-op">' + op + '</span><span class="qt-lbl">' + label + '</span><b data-t="' + key + '">RM ' + qtRM(v) + "</b></div>";
   function qtEditor() {
     const e = QT.edit, kunci = e.status === "MUKTAMAD", dis = kunci ? " disabled" : "", k = qtKira(e), role = LIVE_USER.role;
     const inp = (q, label, v, extra) => '<label class="field"><span>' + esc(label) + '</span><input data-q="' + q + '" value="' + esc(v || "") + '"' + dis + (extra || "") + "></label>";
@@ -1533,8 +1536,15 @@
         '<h3 class="sub-head" style="margin-top:16px">Kos Pentadbiran (Untung)</h3><div class="form-grid">' + inp("untungPeratus", "Peratus daripada jumlah kasar (%)", e.untungPeratus, ' inputmode="decimal"') + ta("untungKeterangan", "Keterangan", e.untungKeterangan, 4) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Pelarasan</h3><div class="form-grid">' + inp("potongan", "Potongan harga (RM)", e.potongan, ' inputmode="decimal"') + inp("cukai", "Cukai (RM)", e.cukai, ' inputmode="decimal"') + inp("lainLain", "Lain-lain perkara (RM)", e.lainLain, ' inputmode="decimal"') + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Terma dan Syarat</h3><div class="form-grid">' + inp("terma.bayaranPeratus", "Bayaran (%)", t.bayaranPeratus) + inp("terma.tempohHari", "Tempoh kerja (hari bekerja)", t.tempohHari) + inp("terma.tarikhAcara", "Tarikh acara", t.tarikhAcara, ' type="date"') + inp("terma.masa", "Masa", t.masa) + ta("terma.tempat", "Tempat acara", t.tempat, 2) + ta("terma.lain", "Terma lain (pilihan)", t.lain, 2) + "</div>" +
-        '<div class="gj-ringkasan qt-ringkasan"><div><span>Jumlah kasar</span><b data-t="kasar">RM ' + qtRM(k.kasar) + '</b></div><div><span>Kos pentadbiran</span><b data-t="untung">RM ' + qtRM(k.untung) + '</b></div><div><span>Jumlah</span><b data-t="jumlah">RM ' + qtRM(k.jumlah) + '</b></div><div><span>Jumlah besar</span><b data-t="besar">RM ' + qtRM(k.besar) + "</b></div>" +
-          '<p class="small" data-t="amaran" style="color:var(--bad)"' + (k.sah ? " hidden" : "") + ">Ada nilai tidak sah (guna format 1234.50).</p></div>" +
+        '<div class="qt-resit" aria-label="Ringkasan jumlah">' +
+          qtR("", "Jumlah kasar (semua item)", "kasar", k.kasar) +
+          qtR("+", 'Kos pentadbiran (<span data-t="pct">' + esc(String(k.pct)) + "</span>%)", "untung", k.untung) +
+          qtR("=", "Jumlah", "jumlah", k.jumlah, "sub") +
+          qtR("−", "Potongan harga", "pot", k.pot) +
+          qtR("+", "Cukai", "cuk", k.cuk) +
+          qtR("+", "Lain-lain perkara", "lain", k.lain) +
+          qtR("=", "JUMLAH BESAR", "besar", k.besar, "besar") +
+        "</div>" + '<p class="small" data-t="amaran" style="color:var(--bad)"' + (k.sah ? " hidden" : "") + ">Ada nilai tidak sah (guna format 1234.50).</p>" +
         '<div class="row-actions" style="margin-top:16px">' + btn("← Kembali", "qt-tutup") + (kunci ? "" : btn("Simpan Draf", "qt-simpan", "primary")) +
           (e.quo_id ? btn("Pratonton & Cetak", "qt-cetak") : "") + (e.quo_id && !kunci && ["SUPER_ADMIN", "MANAGEMENT", "PROJECT_MANAGER"].includes(role) ? btn("Muktamadkan", "qt-muktamad") : "") +
           (e.quo_id && kunci && ["SUPER_ADMIN", "MANAGEMENT"].includes(role) ? btn("Buka Semula", "qt-bukasemula") : "") + (e.quo_id ? btn("Salin sebagai Baharu", "qt-salin") : "") + "</div>" +

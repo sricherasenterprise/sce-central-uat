@@ -563,3 +563,17 @@ button.pop-link { width: 100%; text-align: left; background: none; border: 0; fo
 .quo-tt-kosong { height: 70px; }
 @media print { #print-area .quo { width: 100%; } .quo-kotak th, .quo-pihak th, .quo-item th, .quo-ringkas th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 .qt-pilih { max-width: 100%; margin-top: 6px; }
+
+/* Ringkasan jumlah quotation (gaya resit) */
+.qt-resit { margin-top: var(--s5); margin-left: auto; max-width: 460px; padding: var(--s4) var(--s5); border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--teal-tint); }
+.qt-r { display: grid; grid-template-columns: 18px 1fr auto; gap: var(--s2); align-items: baseline; padding: 4px 0; }
+.qt-op { color: var(--text-3); font-weight: 700; text-align: center; }
+.qt-lbl { color: var(--text-2); }
+.qt-r b { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.qt-r.sub { border-top: 1px solid var(--border-strong); margin-top: 4px; padding-top: 8px; }
+.qt-r.sub .qt-lbl { color: var(--text); font-weight: 600; }
+.qt-r.sifar { opacity: .5; }
+.qt-r.besar { border-top: 2px solid var(--navy); margin-top: 6px; padding-top: 10px; }
+.qt-r.besar .qt-lbl { color: var(--text); font-weight: 700; letter-spacing: .03em; }
+.qt-r.besar b { font-size: 20px; color: var(--teal-strong); }
+@media (max-width: 640px) { .qt-resit { max-width: none; } }
