@@ -1579,8 +1579,8 @@
       onSubmit: async (d) => {
         const g = d.imej; if (!g || !g.size) { toast("Sila pilih imej."); return; }
         try {
-          const png = await new Promise((ok, gagal) => { const r = new FileReader(); r.onerror = () => gagal(new Error("Gagal membaca fail.")); r.onload = () => { const img = new Image(); img.onerror = () => gagal(new Error("Fail bukan gambar.")); img.onload = () => { const sk = Math.min(1, 700 / img.width); const cv = document.createElement("canvas"); cv.width = Math.round(img.width * sk); cv.height = Math.round(img.height * sk); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); ok(cv.toDataURL("image/png")); }; img.src = r.result; }; r.readAsDataURL(g); });
-          await LIVE.api("quo.tandatangan", { mime: "image/png", data: png.split(",")[1] });
+          const png = await new Promise((ok, gagal) => { const r = new FileReader(); r.onerror = () => gagal(new Error("Gagal membaca fail.")); r.onload = () => { const img = new Image(); img.onerror = () => gagal(new Error("Fail bukan gambar.")); img.onload = () => { const sk = Math.min(1, 700 / img.width); const cv = document.createElement("canvas"); cv.width = Math.round(img.width * sk); cv.height = Math.round(img.height * sk); const g2 = cv.getContext("2d"); g2.fillStyle = "#fff"; g2.fillRect(0, 0, cv.width, cv.height); g2.drawImage(img, 0, 0, cv.width, cv.height); const png = cv.toDataURL("image/png"); ok(png.length * 0.75 <= 290000 ? png : cv.toDataURL("image/jpeg", 0.9)); }; img.src = r.result; }; r.readAsDataURL(g); });
+          await LIVE.api("quo.tandatangan", { mime: png.indexOf("data:image/jpeg") === 0 ? "image/jpeg" : "image/png", data: png.split(",")[1] });
           toast("Imej tandatangan disimpan."); qtReload();
         } catch (e) { toast(e.message); }
       } });
