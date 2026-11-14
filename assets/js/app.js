@@ -234,7 +234,7 @@
   const LIVE_TIADA_CAP = ["finance.", "dbkl.", "program."]; // kewangan ditangguh; Program dan DBKL kini data sebenar baca sahaja
   const can = (cap) => POLICY.caps.includes(cap) && !(LIVE_USER && LIVE_TIADA_CAP.some((p) => cap.indexOf(p) === 0));
   Object.keys(PERMISSIONS).forEach((k) => { const r = PERMISSIONS[k].routes; if ((r.includes("programs") || r.includes("dbkl")) && !r.includes("operations")) r.push("operations"); });
-  const canRoute = (r) => (r === "payroll" ? !!(LIVE_USER && LIVE_USER.payroll) : POLICY.routes.includes(r) && !(LIVE_USER && r === "finance"));
+  const canRoute = (r) => (r === "payroll" ? !!(LIVE_USER && LIVE_USER.payroll) : r === "quotation" ? !!(LIVE_USER && LIVE_USER.quotation) : POLICY.routes.includes(r) && !(LIVE_USER && r === "finance"));
   const me = SESSION.name;
   let F = null; // data kewangan: kekal null bagi role tanpa finance.view
 
@@ -296,6 +296,7 @@
   };
   ICON.operations = ICON.dbkl || ICON.programs;
   ICON.payroll = ICON.finance;
+  ICON.quotation = ICON.documents;
   const icon = (n) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + "</svg>";
 
   function panelHead(title, sub, action, tag) {
@@ -931,7 +932,7 @@
     LIVE.api(SUMBER[kind][0])
       .then((o) => { LD[kind] = SUMBER[kind][1] ? o[SUMBER[kind][1]] : o; LD.at[kind] = o.dikemasKini; LD.err[kind] = null; })
       .catch((e) => { LD.err[kind] = e.code === "TIADA_KEBENARAN" ? "Akaun anda tiada kebenaran untuk data ini." : (e.message || "Ralat memuatkan data."); })
-      .finally(() => { LD.busy[kind] = false; if (kind === "notif") renderNotifs(); else if (["programs", "dbkl", "operations", "dashboard", "tasks", "payroll"].includes(currentRoute())) refresh(); });
+      .finally(() => { LD.busy[kind] = false; if (kind === "notif") renderNotifs(); else if (["programs", "dbkl", "operations", "dashboard", "tasks", "payroll", "quotation"].includes(currentRoute())) refresh(); });
   }
   const liveTag = '<span class="live-tag">Data sebenar · baca sahaja</span>';
   const liveTagDev = '<span class="live-tag">Data sebenar DEV</span>'; // Tasks dan notifikasi: boleh ditulis, dalam SCE-DEV-TASKS
@@ -1013,7 +1014,81 @@
     const o = (LD.order || []).find((x) => x.id === id); if (!o) return;
     openInfo({ title: "Order " + o.id, body: detailList([["Tetuan", esc(o.tetuan || "—")], ["No. Rujukan JPRB", esc(o.rujukanJprb || "—")], ["Lokasi", esc(o.lokasi || "—")], ["Kaedah", esc(o.kaedah || "—")], ["Staf", esc(o.staf || "—")], ["Kemajuan", o.siap + " / " + o.perlu + " langkah"]]) +
       '<ol class="checklist">' + o.langkah.map((l) => '<li class="cl-' + l.status + '"><span>' + esc(l.nama) + "</span>" + '<span class="badge ' + LANGKAH_TONE[l.status] + '">' + (l.status === "siap" ? esc(l.tarikh) : l.status === "na" ? "N/A" : "Belum") + "</span></li>").join("") + "</ol>" +
-      note("Rekod sebenar, baca sahaja. Tanda langkah dibuat dalam Portal Staf dashboard operasi sedia ada.") });
+      note("Rekod sebenar, baca sahaja. Tanda langkah dibuat dalam Portal Staf dashboard operasi sedia ada.") +
+      '<h3 class="sub-head" style="margin-top:16px">Gambar Signboard</h3><div id="galeri-foto" data-order="' + esc(o.id) + '"><p class="small muted" role="status">Memuatkan gambar…</p></div>',
+      actions: btn("+ Tambah Gambar", "foto-tambah", "primary", ' data-id="' + esc(o.id) + '"') });
+    fotoMuat(o.id);
+  }
+
+  /* ========== Gambar signboard (sejarah per order) ========== */
+  const FOTO_PERINGKAT = [["DIPASANG", "Dipasang"], ["SAMPEL", "Draf / Sampel"], ["PENURUNAN", "Penurunan"], ["PEMINDAHAN", "Pemindahan"], ["BUKTI", "Bukti lain"]];
+  const fotoLabel = (k) => (FOTO_PERINGKAT.find(([v]) => v === k) || [k, k])[1];
+  const THUMB_SAH = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/;
+  async function fotoMuat(orderId) {
+    const el = () => document.querySelector('#galeri-foto[data-order="' + orderId + '"]');
+    try {
+      const o = await LIVE.api("foto.list", { order_id: orderId });
+      if (!el()) return;
+      el().innerHTML = o.foto.length ? '<div class="galeri">' + o.foto.map((f) =>
+        '<figure class="galeri-item' + (f.tersembunyi ? " tersembunyi" : "") + '">' +
+          '<button type="button" class="galeri-thumb" data-action="foto-lihat" data-id="' + esc(f.foto_id) + '" aria-label="Lihat gambar ' + esc(fotoLabel(f.peringkat)) + '"><img src="' + esc(THUMB_SAH.test(f.thumb) ? f.thumb : "") + '" alt=""></button>' +
+          "<figcaption><b>" + esc(fotoLabel(f.peringkat)) + "</b> · " + esc(f.diambil_pada ? fmtDate(f.diambil_pada) : "") + (f.catatan ? "<br>" + esc(f.catatan) : "") +
+          '<br><span class="muted">' + esc(f.oleh) + (f.tersembunyi ? " · tersembunyi" : "") + "</span>" +
+          (o.bolehSorok ? '<br><button type="button" class="link-btn" data-action="foto-sorok" data-id="' + esc(f.foto_id) + '" data-order="' + esc(orderId) + '" data-papar="' + (f.tersembunyi ? "1" : "") + '">' + (f.tersembunyi ? "Papar semula" : "Sorok") + "</button>" : "") +
+          "</figcaption></figure>").join("") + "</div>"
+        : '<p class="small muted">Belum ada gambar untuk order ini.</p>';
+    } catch (e) { if (el()) el().innerHTML = '<p class="small muted">' + esc(e.message) + "</p>"; }
+  }
+  // Mampatkan gambar dalam pelayar: sisi terpanjang maks `maks` px, JPEG.
+  function fotoMampat(failGambar, maks, kualiti) {
+    return new Promise((ok, gagal) => {
+      const r = new FileReader();
+      r.onerror = () => gagal(new Error("Gagal membaca fail."));
+      r.onload = () => {
+        const img = new Image();
+        img.onerror = () => gagal(new Error("Fail bukan gambar yang boleh dibaca."));
+        img.onload = () => {
+          const sk = Math.min(1, maks / Math.max(img.width, img.height));
+          const c = document.createElement("canvas"); c.width = Math.round(img.width * sk); c.height = Math.round(img.height * sk);
+          const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+          ok(c.toDataURL("image/jpeg", kualiti));
+        };
+        img.src = r.result;
+      };
+      r.readAsDataURL(failGambar);
+    });
+  }
+  function fotoTambah(orderId) {
+    openForm({ live: true, title: "Tambah Gambar: " + orderId, submit: "Muat Naik", intro: note("Gambar dimampatkan automatik sebelum dihantar."), fields: [
+      { name: "foto", label: "Gambar", type: "file", required: true, full: true },
+      { name: "peringkat", label: "Peringkat", type: "select", options: FOTO_PERINGKAT, value: "DIPASANG" },
+      { name: "diambil_pada", label: "Tarikh gambar", type: "date", value: TODAY, max: TODAY },
+      { name: "catatan", label: "Catatan (pilihan)", type: "textarea", full: true, maxlength: 300 }
+    ], onSubmit: async (d) => {
+      const g = d.foto;
+      if (!g || !g.size) { toast("Sila pilih gambar."); return; }
+      if (!/^image\//.test(g.type)) { toast("Fail mesti gambar."); return; }
+      toast("Memampatkan dan memuat naik…");
+      try {
+        const penuh = await fotoMampat(g, 1600, 0.82);
+        let thumb = await fotoMampat(g, 320, 0.6);
+        if (thumb.length > 44000) thumb = await fotoMampat(g, 240, 0.5);
+        await LIVE.api("foto.upload", { order_id: orderId, peringkat: d.peringkat, diambil_pada: d.diambil_pada, catatan: d.catatan, mime: "image/jpeg", data: penuh.split(",")[1], thumb: thumb });
+        toast("Gambar dimuat naik.");
+        openLiveOrder(orderId);
+      } catch (e) { toast(e.message || "Gagal memuat naik."); }
+    } });
+    const inp = modal.querySelector('input[type="file"]');
+    if (inp) { inp.setAttribute("accept", "image/*"); inp.setAttribute("capture", "environment"); }
+  }
+  async function fotoLihat(id) {
+    openInfo({ title: "Gambar " + id, body: '<p class="muted" role="status">Memuatkan gambar penuh…</p>' });
+    try {
+      const o = await LIVE.api("foto.get", { foto_id: id });
+      if (!/^image\/(jpeg|png|webp)$/.test(o.mime) || !/^[A-Za-z0-9+/=]+$/.test(o.data)) throw new Error("Data gambar tidak sah.");
+      openInfo({ title: "Gambar " + id, body: '<img class="foto-penuh" src="data:' + o.mime + ";base64," + o.data + '" alt="Gambar signboard ' + esc(id) + '">' });
+      modal.classList.add("modal-slip"); modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true });
+    } catch (e) { openInfo({ title: "Gambar " + id, body: note(e.message) }); }
   }
 
   function viewPrograms() {
@@ -1355,6 +1430,164 @@
     }
   });
 
+  /* ========== Quotation (mod LIVE; SA, MG, PM, kebenaran QUOTATION) ========== */
+  const QT = { cfg: null, list: null, err: null, busy: false, edit: null };
+  const qtSen = (v) => gjSen(v);
+  const qtQtyX100 = (v) => { const s = String(v == null ? "" : v).replace(/[,\s]/g, ""); if (!s) return 0; if (!/^\d+(\.\d{1,2})?$/.test(s)) return NaN; const [r, p] = s.split("."); return Number(r) * 100 + Number(((p || "") + "00").slice(0, 2)); };
+  const qtRM = (sen) => { const n = Math.abs(sen || 0); return (sen < 0 ? "-" : "") + String(Math.floor(n / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + String(n % 100).padStart(2, "0"); };
+  const qtTarikhDot = (d) => (d ? d.slice(8, 10) + "." + d.slice(5, 7) + "." + d.slice(0, 4) : "");
+  const qtNl = (s) => esc(s || "").replace(/\n/g, "<br>");
+  function qtLoad() {
+    if (QT.busy) return; QT.busy = true;
+    Promise.all([LIVE.api("quo.config"), LIVE.api("quo.list")])
+      .then(([c, l]) => { QT.cfg = c; QT.list = l.quotation; QT.err = null; })
+      .catch((e) => { QT.err = e.message; })
+      .finally(() => { QT.busy = false; if (currentRoute() === "quotation") refresh(); });
+  }
+  function qtReload() { QT.cfg = null; QT.list = null; qtLoad(); refresh(); }
+
+  function viewQuotation() {
+    const head = (extra) => pageHead("Quotation", "Sediakan dan cetak quotation mengikut format Sri Cheras Enterprise.", (extra || "") + " " + liveTagDev);
+    if (QT.err) return head() + '<section class="panel"><div class="empty"><p>' + esc(QT.err) + '</p><button type="button" class="btn" data-action="qt-reload">Cuba lagi</button></div></section>';
+    if (!QT.cfg || (!QT.list && !QT.edit)) { qtLoad(); return head() + '<section class="panel"><div class="empty" role="status"><p>Memuatkan…</p></div></section>'; }
+    if (QT.edit) return qtEditor();
+    const q = f("qt.q").toLowerCase();
+    const list = QT.list.filter((x) => !q || [x.no_quo, x.no_ruj, x.pelanggan].join(" ").toLowerCase().includes(q));
+    const tt = LIVE_USER.role === "SUPER_ADMIN" ? btn(QT.cfg.adaTandatangan ? "Tukar Imej Tandatangan" : "Muat Naik Imej Tandatangan", "qt-tt") + " " : "";
+    return head(tt + btn("+ Quotation Baharu", "qt-baru", "primary")) +
+      (QT.cfg.adaTandatangan ? "" : note("Imej tandatangan + cop belum dimuat naik. Quotation muktamad akan dicetak dengan ruang tandatangan kosong.")) +
+      '<section class="panel">' + panelHead("Senarai Quotation", list.length + " quotation", "", liveTagDev) + '<div class="toolbar">' + searchBox("qt.q", "Cari no., rujukan, pelanggan") + "</div>" + table([
+        { h: "No. Quo", r: (x) => '<span class="tnum">' + esc(x.no_quo) + "</span>" }, { h: "No. Ruj.", r: (x) => esc(x.no_ruj || "—") }, { h: "Tarikh", r: (x) => '<span class="tnum">' + esc(qtTarikhDot(x.tarikh)) + "</span>" },
+        { h: "Pelanggan", r: (x) => esc(x.pelanggan) }, { h: "Jumlah Besar", num: true, r: (x) => "<b>RM " + qtRM(x.jumlah_besar_sen) + "</b>" },
+        { h: "Status", r: (x) => '<span class="badge ' + (x.status === "MUKTAMAD" ? "good" : "warn") + '">' + (x.status === "MUKTAMAD" ? "Muktamad" : "Draf") + "</span>" },
+        { h: "Oleh", r: (x) => '<span class="small">' + esc(x.oleh) + "</span>" },
+        { h: "Tindakan", r: (x) => btn("Buka", "qt-buka", "small", ' data-id="' + esc(x.quo_id) + '"') }
+      ], list, empty("Belum ada quotation. Klik + Quotation Baharu (templat Communication Strategy).")) + "</section>";
+  }
+
+  function qtKosong(tpl) {
+    const t = JSON.parse(JSON.stringify(tpl));
+    t.bahagian.forEach((b) => b.item.forEach((i) => { i.kuantiti = String(i.kuantiti); i.harga = String(i.harga); }));
+    return Object.assign(t, { quo_id: "", version: "", status: "DRAF", tarikh: TODAY, no_quo: QT.cfg.cadanganNo, no_ruj: "SCE/CS/" + TODAY.slice(5, 7) + "/", pelanggan: { nama: "", alamat: "", hantarKepada: "" }, untuk: "", rujukanDbkl: "" });
+  }
+  async function qtBuka(id, salin) {
+    try {
+      const o = await LIVE.api("quo.get", { quo_id: id });
+      const q = o.quo;
+      q.bahagian.forEach((b) => b.item.forEach((i) => { i.harga = i.harga_sen ? (i.harga_sen / 100).toFixed(2).replace(/\.00$/, "") : ""; }));
+      ["potongan", "cukai", "lainLain"].forEach((k, n) => { const v = q.jumlah[["potongan_sen", "cukai_sen", "lain_sen"][n]]; q[k] = v ? (v / 100).toFixed(2) : ""; });
+      if (salin) Object.assign(q, { quo_id: "", version: "", status: "DRAF", no_quo: QT.cfg.cadanganNo, tarikh: TODAY });
+      QT.edit = q; refresh();
+    } catch (e) { toast(e.message); }
+  }
+  function qtBaca() {
+    const el = document.getElementById("quo-editor"); if (!el || !QT.edit) return;
+    const e = QT.edit;
+    el.querySelectorAll("[data-q]").forEach((i) => { const p = i.dataset.q.split("."); let o = e; for (let k = 0; k < p.length - 1; k++) { o[p[k]] = o[p[k]] || {}; o = o[p[k]]; } o[p[p.length - 1]] = i.value; });
+    e.bahagian = [...el.querySelectorAll(".qt-bahagian")].map((b) => ({ tajuk: b.querySelector("[data-bf=tajuk]").value,
+      item: [...b.querySelectorAll(".qt-item")].map((r) => ({ perkara: r.querySelector("[data-f=perkara]").value, keterangan: r.querySelector("[data-f=keterangan]").value, kuantiti: r.querySelector("[data-f=kuantiti]").value, harga: r.querySelector("[data-f=harga]").value })) }));
+  }
+  function qtKira(e) {
+    let kasar = 0, sah = true;
+    const baris = e.bahagian.map((b) => b.item.map((i) => { const q = qtQtyX100(i.kuantiti), h = qtSen(i.harga); if (isNaN(q) || isNaN(h)) { sah = false; return 0; } const j = Math.round(q * h / 100); kasar += j; return j; }));
+    const pct = Number(e.untungPeratus || 0); if (isNaN(pct)) sah = false;
+    const untung = Math.round(kasar * (pct || 0) / 100), pot = qtSen(e.potongan), cuk = qtSen(e.cukai), lain = qtSen(e.lainLain);
+    if ([pot, cuk, lain].some(isNaN)) sah = false;
+    return { baris, kasar, untung, jumlah: kasar + untung, besar: kasar + untung - (pot || 0) + (cuk || 0) + (lain || 0), sah };
+  }
+  function qtKemasJumlah() {
+    qtBaca(); const k = qtKira(QT.edit), el = document.getElementById("quo-editor"); if (!el) return;
+    el.querySelectorAll(".qt-bahagian").forEach((b, bi) => b.querySelectorAll(".qt-item").forEach((r, ii) => { r.querySelector("[data-jumlah]").textContent = qtRM(k.baris[bi][ii]); }));
+    [["kasar", k.kasar], ["untung", k.untung], ["jumlah", k.jumlah], ["besar", k.besar]].forEach(([n, v]) => { el.querySelector('[data-t="' + n + '"]').textContent = "RM " + qtRM(v); });
+    el.querySelector("[data-t=amaran]").hidden = k.sah;
+  }
+  function qtEditor() {
+    const e = QT.edit, kunci = e.status === "MUKTAMAD", dis = kunci ? " disabled" : "", k = qtKira(e), role = LIVE_USER.role;
+    const inp = (q, label, v, extra) => '<label class="field"><span>' + esc(label) + '</span><input data-q="' + q + '" value="' + esc(v || "") + '"' + dis + (extra || "") + "></label>";
+    const ta = (q, label, v, rows) => '<label class="field full"><span>' + esc(label) + '</span><textarea data-q="' + q + '" rows="' + (rows || 3) + '"' + dis + ">" + esc(v || "") + "</textarea></label>";
+    const t = e.terma || {};
+    const bahagian = e.bahagian.map((b, bi) => '<div class="qt-bahagian"><div class="qt-bahagian-head"><span class="qt-no">' + (bi + 1) + '</span><input data-bf="tajuk" value="' + esc(b.tajuk) + '" placeholder="Tajuk bahagian"' + dis + ' aria-label="Tajuk bahagian">' +
+      (kunci ? "" : '<button type="button" class="icon-btn" data-action="qt-buang-b" data-b="' + bi + '" aria-label="Buang bahagian">✕</button>') + "</div>" +
+      b.item.map((i, ii) => '<div class="qt-item"><textarea data-f="perkara" rows="2" placeholder="Perkara"' + dis + ' aria-label="Perkara">' + esc(i.perkara) + '</textarea><textarea data-f="keterangan" rows="2" placeholder="Keterangan / alamat (pilihan)"' + dis + ' aria-label="Keterangan">' + esc(i.keterangan || "") + "</textarea>" +
+        '<div class="qt-angka"><label><span>Kuantiti</span><input data-f="kuantiti" inputmode="decimal" value="' + esc(i.kuantiti) + '"' + dis + '></label><label><span>Harga/Unit (RM)</span><input data-f="harga" inputmode="decimal" value="' + esc(i.harga) + '"' + dis + '></label><div class="qt-jumlah"><span>Jumlah</span><b data-jumlah>' + qtRM(k.baris[bi][ii]) + "</b></div>" +
+        (kunci ? "" : '<button type="button" class="icon-btn" data-action="qt-buang-i" data-b="' + bi + '" data-i="' + ii + '" aria-label="Buang item">✕</button>') + "</div></div>").join("") +
+      (kunci ? "" : btn("+ Item", "qt-tambah-i", "small", ' data-b="' + bi + '"')) + "</div>").join("");
+    return pageHead(e.quo_id ? "Quotation " + e.no_quo : "Quotation Baharu", kunci ? "Quotation ini sudah dimuktamadkan dan dikunci." : "Templat " + (e.jenis === "COMSTRA" ? "Communication Strategy" : e.jenis) + ". Ubah item, kuantiti dan harga mengikut projek.", liveTagDev) +
+      '<section class="panel" id="quo-editor">' +
+        '<h3 class="sub-head">Maklumat Quotation</h3><div class="form-grid">' + inp("no_quo", "No. Quo. / Invoice", e.no_quo) + inp("no_ruj", "No. Ruj. Syarikat", e.no_ruj) + inp("tarikh", "Tarikh", e.tarikh, ' type="date"') + "</div>" +
+        '<h3 class="sub-head" style="margin-top:16px">Pelanggan</h3><div class="form-grid">' + inp("pelanggan.nama", "Kepada (nama syarikat + no. pendaftaran)", e.pelanggan.nama) + ta("pelanggan.alamat", "Alamat", e.pelanggan.alamat, 2) + ta("pelanggan.hantarKepada", "Hantar kepada (pilihan)", e.pelanggan.hantarKepada, 2) + "</div>" +
+        '<h3 class="sub-head" style="margin-top:16px">Butiran Projek</h3><div class="form-grid">' + ta("pengenalan", "Pengenalan / cadangan pembangunan", e.pengenalan, 5) + inp("untuk", "UNTUK (Tetuan)", e.untuk) + inp("rujukanDbkl", "No. Rujukan DBKL", e.rujukanDbkl) + "</div>" +
+        '<h3 class="sub-head" style="margin-top:16px">Item</h3>' + bahagian + (kunci ? "" : '<div style="margin-top:8px">' + btn("+ Bahagian", "qt-tambah-b", "small") + "</div>") +
+        '<h3 class="sub-head" style="margin-top:16px">Kos Pentadbiran (Untung)</h3><div class="form-grid">' + inp("untungPeratus", "Peratus daripada jumlah kasar (%)", e.untungPeratus, ' inputmode="decimal"') + ta("untungKeterangan", "Keterangan", e.untungKeterangan, 4) + "</div>" +
+        '<h3 class="sub-head" style="margin-top:16px">Pelarasan</h3><div class="form-grid">' + inp("potongan", "Potongan harga (RM)", e.potongan, ' inputmode="decimal"') + inp("cukai", "Cukai (RM)", e.cukai, ' inputmode="decimal"') + inp("lainLain", "Lain-lain perkara (RM)", e.lainLain, ' inputmode="decimal"') + "</div>" +
+        '<h3 class="sub-head" style="margin-top:16px">Terma dan Syarat</h3><div class="form-grid">' + inp("terma.bayaranPeratus", "Bayaran (%)", t.bayaranPeratus) + inp("terma.tempohHari", "Tempoh kerja (hari bekerja)", t.tempohHari) + inp("terma.tarikhAcara", "Tarikh acara", t.tarikhAcara, ' type="date"') + inp("terma.masa", "Masa", t.masa) + ta("terma.tempat", "Tempat acara", t.tempat, 2) + ta("terma.lain", "Terma lain (pilihan)", t.lain, 2) + "</div>" +
+        '<div class="gj-ringkasan qt-ringkasan"><div><span>Jumlah kasar</span><b data-t="kasar">RM ' + qtRM(k.kasar) + '</b></div><div><span>Kos pentadbiran</span><b data-t="untung">RM ' + qtRM(k.untung) + '</b></div><div><span>Jumlah</span><b data-t="jumlah">RM ' + qtRM(k.jumlah) + '</b></div><div><span>Jumlah besar</span><b data-t="besar">RM ' + qtRM(k.besar) + "</b></div>" +
+          '<p class="small" data-t="amaran" style="color:var(--bad)"' + (k.sah ? " hidden" : "") + ">Ada nilai tidak sah (guna format 1234.50).</p></div>" +
+        '<div class="row-actions" style="margin-top:16px">' + btn("← Kembali", "qt-tutup") + (kunci ? "" : btn("Simpan Draf", "qt-simpan", "primary")) +
+          (e.quo_id ? btn("Pratonton & Cetak", "qt-cetak") : "") + (e.quo_id && !kunci && ["SUPER_ADMIN", "MANAGEMENT", "PROJECT_MANAGER"].includes(role) ? btn("Muktamadkan", "qt-muktamad") : "") +
+          (e.quo_id && kunci && ["SUPER_ADMIN", "MANAGEMENT"].includes(role) ? btn("Buka Semula", "qt-bukasemula") : "") + (e.quo_id ? btn("Salin sebagai Baharu", "qt-salin") : "") + "</div>" +
+      "</section>";
+  }
+  async function qtSimpan() {
+    qtBaca(); const e = QT.edit;
+    const data = { jenis: e.jenis, tarikh: e.tarikh, no_quo: e.no_quo, no_ruj: e.no_ruj, pelanggan: e.pelanggan, pengenalan: e.pengenalan, untuk: e.untuk, rujukanDbkl: e.rujukanDbkl, bahagian: e.bahagian, untungPeratus: e.untungPeratus, untungKeterangan: e.untungKeterangan, potongan: e.potongan, cukai: e.cukai, lainLain: e.lainLain, terma: e.terma };
+    try { const o = await LIVE.api("quo.save", { quo_id: e.quo_id, version: e.version, data: data }); toast("Quotation disimpan."); QT.list = null; await qtBuka(o.quo_id); qtLoad(); }
+    catch (x) { toast(x.message); }
+  }
+  async function qtStatus(ke, sebab) {
+    const e = QT.edit;
+    try { await LIVE.api("quo.status", { quo_id: e.quo_id, version: e.version, status: ke, sebab: sebab || "" }); toast(ke === "MUKTAMAD" ? "Quotation dimuktamadkan." : "Quotation dibuka semula."); await qtBuka(e.quo_id); QT.list = null; qtLoad(); }
+    catch (x) { toast(x.message); }
+  }
+  async function qtCetak() {
+    let o; try { o = await LIVE.api("quo.get", { quo_id: QT.edit.quo_id, cetak: true }); } catch (x) { toast(x.message); return; }
+    const q = o.quo, c = o.syarikat, j = q.jumlah, t = q.terma || {};
+    const ttSah = o.tandatangan && /^image\/(png|jpeg)$/.test(o.tandatangan.mime) && /^[A-Za-z0-9+/=]+$/.test(o.tandatangan.data);
+    const ttImg = q.status === "MUKTAMAD" && ttSah ? '<img class="quo-tt" src="data:' + o.tandatangan.mime + ";base64," + o.tandatangan.data + '" alt="Tandatangan dan cop">' : '<div class="quo-tt-kosong"></div>';
+    const hariMs = (d) => (d ? DAYS[new Date(d + "T00:00:00Z").getUTCDay()].toUpperCase() : "");
+    const tarikhPanjang = (d) => (d ? +d.slice(8, 10) + " " + MONTHS_FULL[+d.slice(5, 7) - 1].toUpperCase() + " " + d.slice(0, 4) : "");
+    const baris = q.bahagian.map((b, bi) => '<tr class="quo-sec"><td class="c">' + (bi + 1) + "</td><td><b><u>" + esc(b.tajuk) + "</u></b></td><td></td><td></td><td></td></tr>" +
+      b.item.map((i) => '<tr><td></td><td>' + qtNl(i.perkara) + (i.keterangan ? '<div class="quo-ket">' + qtNl(i.keterangan) + "</div>" : "") + '</td><td class="c">' + esc(i.kuantiti) + '</td><td class="r">' + qtRM(i.harga_sen) + '</td><td class="r">' + qtRM(i.jumlah_sen) + "</td></tr>").join("")).join("") +
+      '<tr class="quo-sec"><td class="c">' + (q.bahagian.length + 1) + "</td><td>" + qtNl(q.untungKeterangan) + "<br>" + esc(q.untungPeratus) + ' % dari nilai harga besar sebagai profit syarikat.</td><td></td><td></td><td class="r">' + qtRM(j.untung_sen) + "</td></tr>" +
+      '<tr class="quo-subtot"><td></td><td class="r">Jumlah kasar</td><td></td><td></td><td class="r">' + qtRM(j.kasar_sen) + "</td></tr>";
+    const terma = '<div class="quo-terma"><b><u>Terma Dan Syarat :</u></b><br>Bayaran adalah seperti berikut ;<br>' + esc(t.bayaranPeratus || "100") + " % &nbsp; RM " + qtRM(j.besar_sen) +
+      (t.tempohHari ? "<br>Jangkamasa tempoh kerja dalam " + esc(t.tempohHari) + " hari bekerja." : "") +
+      (t.tarikhAcara ? "<br>Tarikh Acara Yang Telah Ditetapkan pada<br><table class='quo-acara'><tr><td>TARIKH:</td><td>" + esc(tarikhPanjang(t.tarikhAcara)) + "</td></tr><tr><td>HARI:</td><td>" + esc(hariMs(t.tarikhAcara)) + "</td></tr>" + (t.masa ? "<tr><td>MASA:</td><td>" + esc(t.masa) + "</td></tr>" : "") + (t.tempat ? "<tr><td>TEMPAT:</td><td>" + qtNl(t.tempat) + "</td></tr>" : "") + "</table>" : "") +
+      (t.lain ? "<br>" + qtNl(t.lain) : "") + "</div>";
+    const html = '<div class="quo">' +
+      '<div class="quo-kepala"><div><div class="quo-nama">' + esc(c.nama) + " " + esc(c.noDaftar) + '</div><div class="quo-hq"><b>HEAD OFFICE:</b><br>' + c.alamat.map(esc).join("<br>") + "</div></div>" +
+        '<table class="quo-kotak"><tr><th colspan="2">QUOTATION</th></tr><tr><td>Tarikh</td><td>' + esc(qtTarikhDot(q.tarikh)) + "</td></tr><tr><td>No.Quo. Invoice</td><td>" + esc(q.no_quo) + "</td></tr><tr><td>No. Ruj. Syarikat</td><td>" + esc(q.no_ruj) + "</td></tr></table></div>" +
+      '<div class="quo-contact"><b>CONTACT:</b><br>Tel: ' + esc(c.tel) + "<br>Email: " + c.emel.map(esc).join("<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;") + "</div>" +
+      '<table class="quo-pihak"><tr><th>Kepada</th><th>Hantar kepada</th><th>No. Akaun Syarikat</th></tr><tr><td><b>' + esc(q.pelanggan.nama) + "</b><br>" + qtNl(q.pelanggan.alamat) + "</td><td>" + qtNl(q.pelanggan.hantarKepada) + "</td><td>" + esc(c.bank) + "<br>" + esc(c.namaAkaun) + "</td></tr></table>" +
+      '<table class="quo-item"><thead><tr><th>Item</th><th>Perkara</th><th>Kuantiti</th><th>Harga/Unit</th><th>Jumlah</th></tr></thead><tbody>' +
+        '<tr><td></td><td>' + qtNl(q.pengenalan) + (q.untuk ? "<br><br>UNTUK:<br><b>" + esc(q.untuk) + "</b>" : "") + (q.rujukanDbkl ? "<br>NO RUJUKAN DBKL : " + esc(q.rujukanDbkl) : "") + "</td><td></td><td></td><td></td></tr>" + baris + "</tbody></table>" +
+      '<table class="quo-ringkas"><tr><th>POTONGAN HARGA</th><th>CUKAI</th><th>LAIN-LAIN PERKARA</th><th>JUMLAH</th><td class="r">RM ' + qtRM(j.jumlah_sen) + "</td></tr>" +
+        "<tr><td>" + (j.potongan_sen ? "RM " + qtRM(j.potongan_sen) : "NIL") + "</td><td>" + (j.cukai_sen ? "RM " + qtRM(j.cukai_sen) : "") + "</td><td>" + (j.lain_sen ? "RM " + qtRM(j.lain_sen) : "") + '</td><th>JUMLAH BESAR</th><td class="r"><b>RM ' + qtRM(j.besar_sen) + "</b></td></tr></table>" +
+      terma +
+      '<div class="quo-akhir"><div class="quo-sekian">Sekian, terima kasih.<br>Hubungi Sri Cheras Enterprise untuk perkhidmatan terbaik<br>' + ttImg + "<b>(" + esc(c.penandatangan) + ")</b><br>" + esc(c.jawatan) + "</div>" +
+        '<div class="quo-setuju"><b>Nota:</b><br>Saya ………………………………………… mewakili <b>' + esc(q.pelanggan.nama) + "</b> bersetuju untuk membenarkan pihak SRI CHERAS ENTERPRISE sebagai perunding / kontraktor dalam perkara berkaitan dengan " + (q.jenis === "COMSTRA" ? "COMMUNICATION STRATEGY" : esc(q.jenis)) + ".<br><br>NAMA:<br>JAWATAN:<br>SIGN:<br>COP SYARIKAT:<br>TARIKH:</div></div>" +
+      (q.status !== "MUKTAMAD" ? '<p class="slip-draf">DRAF: belum dimuktamadkan (tiada tandatangan)</p>' : "") +
+    "</div>";
+    let area = document.getElementById("print-area");
+    if (!area) { area = document.createElement("div"); area.id = "print-area"; document.body.appendChild(area); }
+    area.innerHTML = html;
+    openInfo({ title: "Pratonton: " + q.no_quo, body: '<div class="slip-pratonton">' + html + "</div>" + (o.tandatanganRalat ? note(o.tandatanganRalat) : "") + note("Klik Cetak, kemudian pilih 'Save as PDF'. Nama fail cadangan: QUOTATION " + (q.jenis === "COMSTRA" ? "COMM. STRATEGY" : q.jenis) + " TETUAN " + String(q.pelanggan.nama || "").toUpperCase()), actions: btn("Cetak / Simpan PDF", "gj-print", "primary") });
+    modal.classList.add("modal-slip"); modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true });
+  }
+  function qtTandatangan() {
+    openForm({ live: true, title: "Imej Tandatangan + Cop", submit: "Muat Naik", intro: note("Imej ini dicetak pada quotation yang telah dimuktamadkan sahaja. Gunakan PNG berlatar putih/lutsinar."), fields: [{ name: "imej", label: "Imej (PNG/JPEG)", type: "file", required: true, full: true }],
+      onSubmit: async (d) => {
+        const g = d.imej; if (!g || !g.size) { toast("Sila pilih imej."); return; }
+        try {
+          const png = await new Promise((ok, gagal) => { const r = new FileReader(); r.onerror = () => gagal(new Error("Gagal membaca fail.")); r.onload = () => { const img = new Image(); img.onerror = () => gagal(new Error("Fail bukan gambar.")); img.onload = () => { const sk = Math.min(1, 700 / img.width); const cv = document.createElement("canvas"); cv.width = Math.round(img.width * sk); cv.height = Math.round(img.height * sk); cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); ok(cv.toDataURL("image/png")); }; img.src = r.result; }; r.readAsDataURL(g); });
+          await LIVE.api("quo.tandatangan", { mime: "image/png", data: png.split(",")[1] });
+          toast("Imej tandatangan disimpan."); qtReload();
+        } catch (e) { toast(e.message); }
+      } });
+    const inp = modal.querySelector('input[type="file"]'); if (inp) inp.setAttribute("accept", "image/png,image/jpeg");
+  }
+  document.addEventListener("input", (ev) => { if (QT.edit && ev.target.closest("#quo-editor")) qtKemasJumlah(); });
+
   /* ========== Pengguna & password (mod LIVE) ========== */
   function liveChangePassword() {
     openForm({ live: true, title: "Tukar Password", submit: "Tukar Password", intro: note("Minimum 10 aksara, dengan huruf dan nombor. Sesi lain akan dilog keluar."), fields: [
@@ -1481,7 +1714,7 @@
     return '<div class="toolbar ops-tabs" aria-label="Kategori operasi">' + chips("ops.tab", tabs) + "</div>" + (f("ops.tab") === "dbkl" ? viewDbkl() : viewPrograms());
   }
   const NAV = [
-    ["Modul", [["dashboard", "Dashboard", viewDashboard], ["projects", "Projects", viewProjects], ["tasks", "Tasks", viewTasks], ["operations", "Operations", viewOperations], ["finance", "Finance", viewFinance], ["documents", "Documents", viewDocuments], ["payroll", "Slip Gaji", viewPayroll]]],
+    ["Modul", [["dashboard", "Dashboard", viewDashboard], ["projects", "Projects", viewProjects], ["tasks", "Tasks", viewTasks], ["operations", "Operations", viewOperations], ["finance", "Finance", viewFinance], ["documents", "Documents", viewDocuments], ["payroll", "Slip Gaji", viewPayroll], ["quotation", "Quotation", viewQuotation]]],
     ["Tetapan", [["access", "Pengguna & Akses", viewAccess], ["staff", "Direktori Staf", viewStaff], ["settings", "Tetapan Sistem", viewSettings]]]
   ];
   const NAV_SOROK = ["finance"];
@@ -1668,6 +1901,27 @@
     "live-detail"(el) { openLiveDetail(el.dataset.kunci); },
     "live-order"(el) { openLiveOrder(el.dataset.id); },
     "lt-new"() { liveTaskNew(); },
+    "qt-reload"() { qtReload(); },
+    "qt-baru"() { QT.edit = qtKosong(QT.cfg.templat.COMSTRA); refresh(); },
+    "qt-buka"(el) { qtBuka(el.dataset.id); },
+    "qt-salin"() { qtBaca(); qtBuka(QT.edit.quo_id, true); },
+    "qt-tutup"() { QT.edit = null; refresh(); },
+    "qt-simpan"() { qtSimpan(); },
+    "qt-cetak"() { qtCetak(); },
+    "qt-tt"() { qtTandatangan(); },
+    "qt-tambah-b"() { qtBaca(); QT.edit.bahagian.push({ tajuk: "", item: [{ perkara: "", keterangan: "", kuantiti: "1", harga: "" }] }); refresh(); },
+    "qt-buang-b"(el) { qtBaca(); QT.edit.bahagian.splice(+el.dataset.b, 1); refresh(); },
+    "qt-tambah-i"(el) { qtBaca(); QT.edit.bahagian[+el.dataset.b].item.push({ perkara: "", keterangan: "", kuantiti: "1", harga: "" }); refresh(); },
+    "qt-buang-i"(el) { qtBaca(); QT.edit.bahagian[+el.dataset.b].item.splice(+el.dataset.i, 1); refresh(); },
+    "qt-muktamad"() { openForm({ live: true, title: "Muktamadkan " + QT.edit.no_quo, submit: "Muktamadkan", intro: note("Quotation akan dikunci dan dicetak dengan imej tandatangan + cop. Hanya Super Admin atau Management boleh membukanya semula."), fields: [{ name: "ok", label: "Saya telah menyemak item, harga dan jumlah", type: "confirm", required: true }], onSubmit: () => qtStatus("MUKTAMAD") }); },
+    "qt-bukasemula"() { openForm({ live: true, title: "Buka Semula " + QT.edit.no_quo, submit: "Buka Semula", fields: [{ name: "sebab", label: "Sebab", type: "textarea", required: true, full: true, maxlength: 300 }], onSubmit: (d) => qtStatus("DRAF", d.sebab) }); },
+    "foto-tambah"(el) { fotoTambah(el.dataset.id); },
+    "foto-lihat"(el) { fotoLihat(el.dataset.id); },
+    "foto-sorok"(el) {
+      const papar = !!el.dataset.papar, ord = el.dataset.order, id = el.dataset.id;
+      openForm({ live: true, title: (papar ? "Papar semula " : "Sorok ") + id, submit: papar ? "Papar" : "Sorok", fields: [{ name: "sebab", label: "Sebab", type: "textarea", required: true, full: true, maxlength: 200 }],
+        onSubmit: async (d) => { try { await LIVE.api("foto.hide", { foto_id: id, sebab: d.sebab, papar: papar }); toast("Dikemas kini."); } catch (e) { toast(e.message); } openLiveOrder(ord); } });
+    },
     "gj-reload"() { gjReload(); },
     "gj-pekerja"(el) { gjPekerjaForm(el.dataset.id || ""); },
     "gj-baru"() { gjBaru(); },

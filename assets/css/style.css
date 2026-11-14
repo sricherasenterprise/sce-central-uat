@@ -509,3 +509,56 @@ button.pop-link { width: 100%; text-align: left; background: none; border: 0; fo
 }
 .modal.modal-slip { width: min(860px, 96vw); max-width: none; }
 .modal.modal-slip .slip-pratonton { padding: 16px; }
+
+/* Gambar signboard */
+.galeri { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--s3); }
+.galeri-item { margin: 0; font-size: var(--fs-micro); }
+.galeri-item.tersembunyi { opacity: .5; }
+.galeri-thumb { display: block; width: 100%; aspect-ratio: 4 / 3; padding: 0; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; background: var(--surface-sunk); cursor: zoom-in; }
+.galeri-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.galeri-item figcaption { margin-top: 4px; line-height: 1.35; }
+.foto-penuh { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; border-radius: var(--r-sm); }
+
+/* ===== Quotation editor ===== */
+.qt-bahagian { margin-top: var(--s4); padding: var(--s3); border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface-sunk); }
+.qt-bahagian-head { display: flex; gap: var(--s2); align-items: center; margin-bottom: var(--s2); }
+.qt-bahagian-head input { flex: 1; min-height: 38px; padding: 6px 10px; font-weight: 700; border: 1px solid var(--border-strong); border-radius: var(--r-sm); }
+.qt-no { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 12px; font-weight: 700; flex: none; }
+.qt-item { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); padding: var(--s2) 0; border-top: 1px dashed var(--border); }
+.qt-item textarea { width: 100%; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); resize: vertical; }
+.qt-angka { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; }
+.qt-angka label, .qt-jumlah { display: flex; flex-direction: column; font-size: var(--fs-micro); color: var(--text-2); }
+.qt-angka input { width: 120px; min-height: 36px; padding: 4px 8px; text-align: right; border: 1px solid var(--border-strong); border-radius: var(--r-sm); font-variant-numeric: tabular-nums; }
+.qt-jumlah b { font-size: 15px; color: var(--text); font-variant-numeric: tabular-nums; min-width: 100px; padding: 6px 0; }
+@media (max-width: 640px) { .qt-item { grid-template-columns: 1fr; } }
+
+/* ===== Quotation (pratonton + cetak), ikut format SCE ===== */
+.quo { width: 760px; color: #000; font: 11.5px/1.35 Arial, Helvetica, sans-serif; background: #fff; }
+.quo-kepala { display: flex; justify-content: space-between; gap: 16px; }
+.quo-nama { font-weight: 700; font-size: 15px; }
+.quo-hq { margin-top: 6px; }
+.quo-kotak { border-collapse: collapse; min-width: 300px; align-self: flex-start; }
+.quo-kotak th { background: #1F3864; color: #fff; font-size: 16px; letter-spacing: 2px; padding: 6px; }
+.quo-kotak td { border: 1px solid #888; padding: 3px 8px; }
+.quo-contact { margin: 8px 0 10px; }
+.quo-pihak, .quo-item, .quo-ringkas { width: 100%; border-collapse: collapse; }
+.quo-pihak th, .quo-item th, .quo-ringkas th { background: #D9E2F3; border: 1px solid #888; padding: 4px 6px; text-align: left; font-size: 11px; }
+.quo-pihak td { border: 1px solid #888; padding: 6px; vertical-align: top; width: 33%; }
+.quo-item { margin-top: 10px; }
+.quo-item td { border-left: 1px solid #888; border-right: 1px solid #888; padding: 2px 6px; vertical-align: top; }
+.quo-item tbody tr:last-child td { border-bottom: 1px solid #888; }
+.quo-item th:nth-child(1), .quo-item td.c { text-align: center; }
+.quo-item th:nth-child(1) { width: 36px; } .quo-item th:nth-child(3) { width: 64px; } .quo-item th:nth-child(4), .quo-item th:nth-child(5) { width: 84px; }
+.quo-item td.r, .quo-ringkas td.r { text-align: right; white-space: nowrap; }
+.quo-item tr.quo-sec td { padding-top: 8px; }
+.quo-item tr.quo-subtot td { border-top: 1px solid #888; font-weight: 700; }
+.quo-ket { color: #333; padding-left: 10px; font-size: 10.5px; }
+.quo-ringkas { margin-top: 6px; }
+.quo-ringkas td { border: 1px solid #888; padding: 4px 6px; }
+.quo-terma { margin-top: 10px; }
+.quo-acara td { padding: 0 8px 0 0; vertical-align: top; }
+.quo-akhir { display: flex; gap: 24px; margin-top: 14px; }
+.quo-sekian, .quo-setuju { flex: 1; }
+.quo-tt { display: block; max-width: 260px; max-height: 150px; margin: 6px 0; }
+.quo-tt-kosong { height: 70px; }
+@media print { #print-area .quo { width: 100%; } .quo-kotak th, .quo-pihak th, .quo-item th, .quo-ringkas th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
