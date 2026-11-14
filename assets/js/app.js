@@ -1501,6 +1501,18 @@
     [["kasar", k.kasar], ["untung", k.untung], ["jumlah", k.jumlah], ["besar", k.besar]].forEach(([n, v]) => { el.querySelector('[data-t="' + n + '"]').textContent = "RM " + qtRM(v); });
     el.querySelector("[data-t=amaran]").hidden = k.sah;
   }
+  const qtNorm = (t) => String(t || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const qtTemplat = (e) => (QT.cfg && QT.cfg.templat && QT.cfg.templat[e.jenis || "COMSTRA"]) || { bahagian: [] };
+  function qtBahagianTiada(e) {
+    const ada = e.bahagian.map((b) => qtNorm(b.tajuk));
+    return qtTemplat(e).bahagian.map((b, i) => ({ i: i, tajuk: b.tajuk })).filter((b) => ada.indexOf(qtNorm(b.tajuk)) < 0);
+  }
+  function qtItemTiada(e, bi) {
+    const tb = qtTemplat(e).bahagian.find((b) => qtNorm(b.tajuk) === qtNorm(e.bahagian[bi].tajuk));
+    if (!tb) return [];
+    const ada = e.bahagian[bi].item.map((x) => qtNorm(x.perkara));
+    return tb.item.map((x, i) => ({ i: i, perkara: x.perkara })).filter((x) => ada.indexOf(qtNorm(x.perkara)) < 0);
+  }
   function qtEditor() {
     const e = QT.edit, kunci = e.status === "MUKTAMAD", dis = kunci ? " disabled" : "", k = qtKira(e), role = LIVE_USER.role;
     const inp = (q, label, v, extra) => '<label class="field"><span>' + esc(label) + '</span><input data-q="' + q + '" value="' + esc(v || "") + '"' + dis + (extra || "") + "></label>";
@@ -1511,13 +1523,13 @@
       b.item.map((i, ii) => '<div class="qt-item"><textarea data-f="perkara" rows="2" placeholder="Perkara"' + dis + ' aria-label="Perkara">' + esc(i.perkara) + '</textarea><textarea data-f="keterangan" rows="2" placeholder="Keterangan / alamat (pilihan)"' + dis + ' aria-label="Keterangan">' + esc(i.keterangan || "") + "</textarea>" +
         '<div class="qt-angka"><label><span>Kuantiti</span><input data-f="kuantiti" inputmode="decimal" value="' + esc(i.kuantiti) + '"' + dis + '></label><label><span>Harga/Unit (RM)</span><input data-f="harga" inputmode="decimal" value="' + esc(i.harga) + '"' + dis + '></label><div class="qt-jumlah"><span>Jumlah</span><b data-jumlah>' + qtRM(k.baris[bi][ii]) + "</b></div>" +
         (kunci ? "" : '<button type="button" class="icon-btn" data-action="qt-buang-i" data-b="' + bi + '" data-i="' + ii + '" aria-label="Buang item">✕</button>') + "</div></div>").join("") +
-      (kunci ? "" : btn("+ Item", "qt-tambah-i", "small", ' data-b="' + bi + '"')) + "</div>").join("");
+      (kunci ? "" : '<select class="inline-select qt-pilih" data-qt-item="' + bi + '" aria-label="Tambah item"><option value="">+ Tambah item…</option>' + qtItemTiada(e, bi).map((x) => '<option value="t' + x.i + '">' + esc(x.perkara.length > 80 ? x.perkara.slice(0, 80) + "…" : x.perkara) + "</option>").join("") + '<option value="kosong">Item kosong (tulis sendiri)</option></select>') + "</div>").join("");
     return pageHead(e.quo_id ? "Quotation " + e.no_quo : "Quotation Baharu", kunci ? "Quotation ini sudah dimuktamadkan dan dikunci." : "Templat " + (e.jenis === "COMSTRA" ? "Communication Strategy" : e.jenis) + ". Ubah item, kuantiti dan harga mengikut projek.", liveTagDev) +
       '<section class="panel" id="quo-editor">' +
         '<h3 class="sub-head">Maklumat Quotation</h3><div class="form-grid">' + inp("no_quo", "No. Quo. / Invoice", e.no_quo) + inp("no_ruj", "No. Ruj. Syarikat", e.no_ruj) + inp("tarikh", "Tarikh", e.tarikh, ' type="date"') + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Pelanggan</h3><div class="form-grid">' + inp("pelanggan.nama", "Kepada (nama syarikat + no. pendaftaran)", e.pelanggan.nama) + ta("pelanggan.alamat", "Alamat", e.pelanggan.alamat, 2) + ta("pelanggan.hantarKepada", "Hantar kepada (pilihan)", e.pelanggan.hantarKepada, 2) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Butiran Projek</h3><div class="form-grid">' + ta("pengenalan", "Pengenalan / cadangan pembangunan", e.pengenalan, 5) + inp("untuk", "UNTUK (Tetuan)", e.untuk) + inp("rujukanDbkl", "No. Rujukan DBKL", e.rujukanDbkl) + "</div>" +
-        '<h3 class="sub-head" style="margin-top:16px">Item</h3>' + bahagian + (kunci ? "" : '<div style="margin-top:8px">' + btn("+ Bahagian", "qt-tambah-b", "small") + "</div>") +
+        '<h3 class="sub-head" style="margin-top:16px">Item</h3>' + bahagian + (kunci ? "" : '<div style="margin-top:8px"><select class="inline-select qt-pilih" data-qt-bahagian aria-label="Tambah bahagian"><option value="">+ Tambah bahagian…</option>' + qtBahagianTiada(e).map((b) => '<option value="t' + b.i + '">' + esc(b.tajuk) + "</option>").join("") + '<option value="kosong">Bahagian kosong (tulis sendiri)</option></select></div>') +
         '<h3 class="sub-head" style="margin-top:16px">Kos Pentadbiran (Untung)</h3><div class="form-grid">' + inp("untungPeratus", "Peratus daripada jumlah kasar (%)", e.untungPeratus, ' inputmode="decimal"') + ta("untungKeterangan", "Keterangan", e.untungKeterangan, 4) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Pelarasan</h3><div class="form-grid">' + inp("potongan", "Potongan harga (RM)", e.potongan, ' inputmode="decimal"') + inp("cukai", "Cukai (RM)", e.cukai, ' inputmode="decimal"') + inp("lainLain", "Lain-lain perkara (RM)", e.lainLain, ' inputmode="decimal"') + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Terma dan Syarat</h3><div class="form-grid">' + inp("terma.bayaranPeratus", "Bayaran (%)", t.bayaranPeratus) + inp("terma.tempohHari", "Tempoh kerja (hari bekerja)", t.tempohHari) + inp("terma.tarikhAcara", "Tarikh acara", t.tarikhAcara, ' type="date"') + inp("terma.masa", "Masa", t.masa) + ta("terma.tempat", "Tempat acara", t.tempat, 2) + ta("terma.lain", "Terma lain (pilihan)", t.lain, 2) + "</div>" +
@@ -1586,7 +1598,39 @@
       } });
     const inp = modal.querySelector('input[type="file"]'); if (inp) inp.setAttribute("accept", "image/png,image/jpeg");
   }
-  document.addEventListener("input", (ev) => { if (QT.edit && ev.target.closest("#quo-editor")) qtKemasJumlah(); });
+  document.addEventListener("input", (ev) => { if (QT.edit && ev.target.closest("#quo-editor") && !ev.target.matches(".qt-pilih")) qtKemasJumlah(); });
+  document.addEventListener("change", (ev) => {
+    if (!QT.edit || !ev.target.matches(".qt-pilih") || !ev.target.value) return;
+    const v = ev.target.value, salin = (o) => JSON.parse(JSON.stringify(o));
+    qtBaca();
+    const tpl = qtTemplat(QT.edit);
+    if (ev.target.hasAttribute("data-qt-bahagian")) {
+      if (v === "kosong") QT.edit.bahagian.push({ tajuk: "", item: [{ perkara: "", keterangan: "", kuantiti: "1", harga: "" }] });
+      else {
+        const ti = +v.slice(1), b = salin(tpl.bahagian[ti]); b.item.forEach((x) => { x.kuantiti = String(x.kuantiti); x.harga = String(x.harga); });
+        // Letak semula di kedudukan asal: sebelum bahagian pertama yang datang selepasnya dalam templat.
+        const idxT = (t) => tpl.bahagian.findIndex((y) => qtNorm(y.tajuk) === qtNorm(t));
+        let pos = QT.edit.bahagian.findIndex((y) => { const k = idxT(y.tajuk); return k > ti; });
+        if (pos < 0) pos = QT.edit.bahagian.length;
+        QT.edit.bahagian.splice(pos, 0, b);
+      }
+    } else {
+      const bi = +ev.target.getAttribute("data-qt-item"), sasar = QT.edit.bahagian[bi];
+      if (!sasar) return;
+      if (v === "kosong") sasar.item.push({ perkara: "", keterangan: "", kuantiti: "1", harga: "" });
+      else {
+        const tb = tpl.bahagian.find((b) => qtNorm(b.tajuk) === qtNorm(sasar.tajuk));
+        const x = tb && salin(tb.item[+v.slice(1)]);
+        if (x) {
+          const ti = +v.slice(1), idxI = (p) => tb.item.findIndex((y) => qtNorm(y.perkara) === qtNorm(p));
+          let pos = sasar.item.findIndex((y) => idxI(y.perkara) > ti);
+          if (pos < 0) pos = sasar.item.length;
+          sasar.item.splice(pos, 0, { perkara: x.perkara, keterangan: x.keterangan || "", kuantiti: String(x.kuantiti), harga: String(x.harga) });
+        }
+      }
+    }
+    refresh();
+  });
 
   /* ========== Pengguna & password (mod LIVE) ========== */
   function liveChangePassword() {
@@ -1910,7 +1954,7 @@
     "qt-cetak"() { qtCetak(); },
     "qt-tt"() { qtTandatangan(); },
     "qt-tambah-b"() { qtBaca(); QT.edit.bahagian.push({ tajuk: "", item: [{ perkara: "", keterangan: "", kuantiti: "1", harga: "" }] }); refresh(); },
-    "qt-buang-b"(el) { qtBaca(); QT.edit.bahagian.splice(+el.dataset.b, 1); refresh(); },
+    "qt-buang-b"(el) { qtBaca(); const b = QT.edit.bahagian[+el.dataset.b]; if (!b) return; if (!window.confirm("Buang bahagian \"" + (b.tajuk || "tanpa tajuk") + "\" (" + b.item.length + " item)?\n\nBahagian templat boleh ditambah semula melalui '+ Tambah bahagian…'.")) return; QT.edit.bahagian.splice(+el.dataset.b, 1); refresh(); },
     "qt-tambah-i"(el) { qtBaca(); QT.edit.bahagian[+el.dataset.b].item.push({ perkara: "", keterangan: "", kuantiti: "1", harga: "" }); refresh(); },
     "qt-buang-i"(el) { qtBaca(); QT.edit.bahagian[+el.dataset.b].item.splice(+el.dataset.i, 1); refresh(); },
     "qt-muktamad"() { openForm({ live: true, title: "Muktamadkan " + QT.edit.no_quo, submit: "Muktamadkan", intro: note("Quotation akan dikunci dan dicetak dengan imej tandatangan + cop. Hanya Super Admin atau Management boleh membukanya semula."), fields: [{ name: "ok", label: "Saya telah menyemak item, harga dan jumlah", type: "confirm", required: true }], onSubmit: () => qtStatus("MUKTAMAD") }); },

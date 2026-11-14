@@ -562,3 +562,4 @@ button.pop-link { width: 100%; text-align: left; background: none; border: 0; fo
 .quo-tt { display: block; max-width: 260px; max-height: 150px; margin: 6px 0; }
 .quo-tt-kosong { height: 70px; }
 @media print { #print-area .quo { width: 100%; } .quo-kotak th, .quo-pihak th, .quo-item th, .quo-ringkas th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.qt-pilih { max-width: 100%; margin-top: 6px; }
