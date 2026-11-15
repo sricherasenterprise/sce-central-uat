@@ -869,8 +869,16 @@
       '<p class="sub-head" style="margin-top:16px">Sejarah</p>' + timeline(sej, "Tiada sejarah.") });
     state.ltTask = t;
     ltLampiranMuat(t.task_id);
+    if (LD.notif && (LD.notif.notifikasi || []).some((n) => n.task_id === t.task_id && !n.dibaca)) ltTandaDibaca({ task_id: t.task_id });
   }
   /* ---------- Lampiran / bukti tugasan ---------- */
+  /** Tanda notifikasi dibaca (ikut notif_id atau task_id), kemudian segar semula loceng. */
+  function ltTandaDibaca(penapis) {
+    if (!penapis.notif_id && !penapis.task_id) return;
+    if (LD.notif) LD.notif.notifikasi.forEach((n) => { if ((penapis.notif_id && n.notif_id === penapis.notif_id) || (penapis.task_id && n.task_id === penapis.task_id)) { if (!n.dibaca) LD.notif.belumDibaca = Math.max(0, LD.notif.belumDibaca - 1); n.dibaca = true; } });
+    renderNotifs();
+    LIVE.api("notifications.read", penapis).then(() => { LD.err.notif = null; liveLoad("notif"); }).catch(() => { /* cuba lagi pada semakan seterusnya */ });
+  }
   const fmtSaiz = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB");
   async function ltLampiranMuat(taskId) {
     const el = () => document.querySelector('#lampiran-tugasan[data-task="' + taskId + '"]');
@@ -2073,7 +2081,7 @@
     "lt-pw"() { closePops(); liveChangePassword(); },
     "lt-reset"(el) { liveResetPassword(el.dataset.emel, el.dataset.nama); },
     async "lt-read-all"() { try { await LIVE.api("notifications.read"); } catch (e) { toast(e.message); } LD.notif = null; liveLoad("notif"); },
-    "lt-notif"(el) { closePops(); const id = el.dataset.id; if (currentRoute() !== "tasks") location.hash = "#tasks"; setTimeout(() => liveTaskOpen(id), 200); },
+    "lt-notif"(el) { closePops(); const id = el.dataset.id; ltTandaDibaca({ notif_id: el.dataset.notif || "" }); if (currentRoute() !== "tasks") location.hash = "#tasks"; setTimeout(() => liveTaskOpen(id), 200); },
     "lt-open"(el) { liveTaskOpen(el.dataset.id); },
     "lt-act"(el) { liveTaskAction(el.dataset.id, el.dataset.t); },
 
@@ -2340,7 +2348,7 @@
     b.innerHTML = icon("bell") + (unread ? '<span class="count-dot">' + unread + "</span>" : "");
     b.setAttribute("aria-label", "Notifikasi, " + unread + " belum dibaca");
     const body = LD.err.notif ? '<p class="small muted" style="padding:12px">' + esc(LD.err.notif) + "</p>" : !LD.notif ? '<p class="small muted" style="padding:12px">Memuatkan…</p>' :
-      d.notifikasi.length ? d.notifikasi.slice(0, 10).map((n) => '<button type="button" class="notif-item' + (n.dibaca ? "" : " unread") + '" data-action="lt-notif" data-id="' + esc(n.task_id) + '"><strong>' + esc(n.title) + "</strong><span>" + esc(n.task_id) + " · " + fmtDateTime(n.at) + "</span></button>").join("") : '<p class="small muted" style="padding:12px">Tiada notifikasi.</p>';
+      d.notifikasi.length ? d.notifikasi.slice(0, 10).map((n) => '<button type="button" class="notif-item' + (n.dibaca ? "" : " unread") + '" data-action="lt-notif" data-id="' + esc(n.task_id) + '" data-notif="' + esc(n.notif_id) + '"><strong>' + esc(n.title) + "</strong><span>" + esc(n.task_id) + " · " + fmtDateTime(n.at) + "</span></button>").join("") : '<p class="small muted" style="padding:12px">Tiada notifikasi.</p>';
     pop.innerHTML = '<div class="notif-head"><h2>Notifikasi ' + liveTagDev + "</h2>" + (unread ? '<button type="button" class="link-btn" data-action="lt-read-all">Tandai semua dibaca</button>' : "") + '</div><div class="notif-list">' + body + "</div>";
   }
   function renderNotifs() {
