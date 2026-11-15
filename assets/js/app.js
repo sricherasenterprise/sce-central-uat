@@ -799,7 +799,7 @@
   /* ========== P2: Tasks SEBENAR (mod LIVE, SCE-DEV-TASKS) ========== */
   const LT_STATUS = (c) => String(c || "").replace(/_/g, " ");
   const LT_TINDAKAN = { accept: "Terima", reject: "Tolak", progress: "Kemas Kini Kemajuan", submit: "Hantar untuk Semakan", approve: "Luluskan", revise: "Minta Revisi", cancel: "Batalkan", comment: "Komen" };
-  const LT_AKSI_SEJARAH = { CREATE: "Dicipta", ACCEPT: "Diterima", REJECT: "Ditolak", PROGRESS: "Kemajuan", STATUS: "Status", NOTE: "Nota", COMMENT: "Komen" };
+  const LT_AKSI_SEJARAH = { CREATE: "Dicipta", ACCEPT: "Diterima", REJECT: "Ditolak", PROGRESS: "Kemajuan", STATUS: "Status", NOTE: "Nota", COMMENT: "Komen", LAMPIRAN: "Lampiran" };
   const ltBadge = (t) => (t.acceptance === "PENDING" && t.status === "TODO" ? badge("PENDING ACCEPTANCE") : t.acceptance === "REJECTED" ? badge("REJECTED") : badge(LT_STATUS(t.status)));
   const ltOverdue = (t) => !["COMPLETED", "CANCELLED"].includes(t.status) && t.due_date && t.due_date < TODAY;
   function ltReload() { LD.tasks = null; LD.err.tasks = null; liveLoad("tasks"); LD.notif = null; liveLoad("notif"); refresh(); }
@@ -865,8 +865,76 @@
       ["Status", ltBadge(t)], ["Kemajuan", progress(Number(t.progress) || 0)], ["Assignee utama", esc(t.nama.primary)], ["Ahli tambahan", esc(t.team || "—")],
       ["Pemberi tugas", esc(t.nama.assigned_by)], ["Penyemak", esc(t.nama.reviewer)], ["Tarikh akhir", t.due_date ? dueText(t.due_date, ["COMPLETED", "CANCELLED"].includes(t.status)) : "—"],
       ["Keterangan", esc(t.description || "—")], ["Sebab tolak", esc(t.reject_reason || "—")]
-    ]) + '<p class="sub-head" style="margin-top:16px">Sejarah</p>' + timeline(sej, "Tiada sejarah.") });
+    ]) + '<p class="sub-head" style="margin-top:16px">Lampiran / Bukti</p><div id="lampiran-tugasan" data-task="' + esc(t.task_id) + '"><p class="small muted" role="status">Memuatkan lampiran…</p></div>' +
+      '<p class="sub-head" style="margin-top:16px">Sejarah</p>' + timeline(sej, "Tiada sejarah.") });
     state.ltTask = t;
+    ltLampiranMuat(t.task_id);
+  }
+  /* ---------- Lampiran / bukti tugasan ---------- */
+  const fmtSaiz = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB");
+  async function ltLampiranMuat(taskId) {
+    const el = () => document.querySelector('#lampiran-tugasan[data-task="' + taskId + '"]');
+    try {
+      const o = await LIVE.api("tasks.lampiran.list", { task_id: taskId });
+      if (!el()) return;
+      el().innerHTML = (o.lampiran.length ? '<div class="galeri">' + o.lampiran.map((l) =>
+        '<figure class="galeri-item' + (l.tersembunyi ? " tersembunyi" : "") + '"><button type="button" class="galeri-thumb' + (l.mime === "application/pdf" ? " pdf" : "") + '" data-action="lmp-lihat" data-id="' + esc(l.lampiran_id) + '" aria-label="Buka ' + esc(l.nama) + '">' +
+          (l.mime === "application/pdf" ? '<span class="pdf-tanda">PDF</span>' : '<img src="' + esc(THUMB_SAH.test(l.thumb) ? l.thumb : "") + '" alt="">') + "</button>" +
+          "<figcaption><b>" + esc(l.nama) + "</b> · " + fmtSaiz(l.saiz_bait) + (l.catatan ? "<br>" + esc(l.catatan) : "") + '<br><span class="muted">' + esc(l.oleh) + " · " + fmtDateTime(l.uploaded_at) + (l.tersembunyi ? " · tersembunyi" : "") + "</span>" +
+          (o.bolehSorok ? '<br><button type="button" class="link-btn" data-action="lmp-sorok" data-id="' + esc(l.lampiran_id) + '" data-task="' + esc(taskId) + '" data-papar="' + (l.tersembunyi ? "1" : "") + '">' + (l.tersembunyi ? "Papar semula" : "Sorok") + "</button>" : "") +
+          "</figcaption></figure>").join("") + "</div>" : '<p class="small muted">Tiada lampiran.</p>') +
+        (o.bolehTambah ? '<div style="margin-top:8px">' + btn("+ Tambah Lampiran", "lmp-tambah", "small", ' data-task="' + esc(taskId) + '"') + "</div>" : "");
+    } catch (e) { if (el()) el().innerHTML = '<p class="small muted">' + esc(e.message) + "</p>"; }
+  }
+  function ltBacaBase64(g) { return new Promise((ok, gagal) => { const r = new FileReader(); r.onerror = () => gagal(new Error("Gagal membaca fail.")); r.onload = () => ok(String(r.result).split(",")[1]); r.readAsDataURL(g); }); }
+  /** Muat naik senarai fail (gambar dimampatkan, PDF maks 2 MB). Pulangkan bilangan berjaya. */
+  async function ltMuatNaikFail(taskId, senarai, catatan) {
+    let ok = 0;
+    for (const g of senarai) {
+      try {
+        if (g.type === "application/pdf" || /\.pdf$/i.test(g.name)) {
+          if (g.size > 2 * 1024 * 1024) { toast(g.name + ": PDF melebihi 2 MB, dilangkau."); continue; }
+          await LIVE.api("tasks.lampiran.upload", { task_id: taskId, nama: g.name, mime: "application/pdf", data: await ltBacaBase64(g), catatan: catatan || "" });
+        } else if (/^image\//.test(g.type)) {
+          const penuh = await fotoMampat(g, 1600, 0.82);
+          let thumb = await fotoMampat(g, 320, 0.6); if (thumb.length > 44000) thumb = await fotoMampat(g, 240, 0.5);
+          await LIVE.api("tasks.lampiran.upload", { task_id: taskId, nama: g.name.replace(/\.[A-Za-z0-9]+$/, "") + ".jpg", mime: "image/jpeg", data: penuh.split(",")[1], thumb: thumb, catatan: catatan || "" });
+        } else { toast(g.name + ": jenis fail tidak disokong, dilangkau."); continue; }
+        ok++;
+      } catch (e) { toast(g.name + ": " + (e.message || "gagal")); }
+    }
+    return ok;
+  }
+  function ltLampiranTambah(taskId) {
+    openForm({ live: true, title: "Tambah Lampiran: " + taskId, submit: "Muat Naik", intro: note("Gambar (dimampatkan automatik) atau PDF maks 2 MB. Boleh pilih beberapa fail."), fields: [
+      { name: "fail", label: "Fail", type: "file", required: true, full: true },
+      { name: "catatan", label: "Catatan (pilihan)", type: "textarea", full: true, maxlength: 300 }
+    ], onSubmit: async (d) => {
+      const fs2 = inp && inp.files ? [...inp.files] : [];
+      if (!fs2.length) { toast("Sila pilih fail."); return; }
+      toast("Memuat naik " + fs2.length + " fail…");
+      const n = await ltMuatNaikFail(taskId, fs2, d.catatan);
+      toast(n + " lampiran dimuat naik.");
+      liveTaskOpen(taskId);
+    } });
+    const inp = modal.querySelector('input[type="file"]');
+    if (inp) { inp.setAttribute("accept", "image/*,application/pdf"); inp.multiple = true; }
+  }
+  async function ltLampiranLihat(id) {
+    openInfo({ title: "Lampiran " + id, body: '<p class="muted" role="status">Memuatkan…</p>' });
+    try {
+      const o = await LIVE.api("tasks.lampiran.get", { lampiran_id: id });
+      if (!/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(o.mime) || !/^[A-Za-z0-9+/=]+$/.test(o.data)) throw new Error("Data fail tidak sah.");
+      if (o.mime === "application/pdf") {
+        const bait = Uint8Array.from(atob(o.data), (c) => c.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([bait], { type: "application/pdf" }));
+        openInfo({ title: o.nama, body: note("PDF sedia. Klik butang di bawah untuk membuka atau memuat turun."), actions: '<a class="btn primary" href="' + url + '" target="_blank" rel="noopener">Buka PDF</a> <a class="btn" href="' + url + '" download="' + esc(o.nama) + '">Muat Turun</a>' });
+        modal.addEventListener("close", () => setTimeout(() => URL.revokeObjectURL(url), 60000), { once: true });
+      } else {
+        openInfo({ title: o.nama, body: '<img class="foto-penuh" src="data:' + o.mime + ";base64," + o.data + '" alt="' + esc(o.nama) + '">' });
+        modal.classList.add("modal-slip"); modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true });
+      }
+    } catch (e) { openInfo({ title: "Lampiran " + id, body: note(e.message) }); }
   }
   function liveTaskAction(id, a) {
     const t = state.ltTask && state.ltTask.task_id === id ? state.ltTask : null; if (!t) return;
@@ -877,9 +945,16 @@
       fields.push({ name: "status", label: "Status", type: "select", options: [["IN_PROGRESS", "IN PROGRESS"], ["BLOCKED", "BLOCKED"]], value: t.status === "BLOCKED" ? "BLOCKED" : "IN_PROGRESS" });
     }
     fields.push({ name: "note", label: { reject: "Sebab penolakan", revise: "Nota revisi", cancel: "Sebab pembatalan", comment: "Komen" }[a] || "Nota (pilihan)", type: "textarea", full: true, required: wajib, maxlength: 1000 });
+    if (a === "submit") fields.push({ name: "bukti", label: "Lampiran bukti (pilihan): gambar atau PDF", type: "file", full: true, help: "Boleh pilih beberapa fail. PDF maks 2 MB setiap satu." });
     openForm({ live: true, title: (LT_TINDAKAN[a] || a) + ": " + t.task_id, submit: LT_TINDAKAN[a] || "Simpan", fields: fields,
       intro: a === "approve" ? note("Meluluskan menandakan tugasan COMPLETED.") : a === "progress" ? note("100% tidak menutup tugasan. Assignee utama perlu menghantar untuk semakan.") : "",
-      onSubmit: (dt) => ltCall("tasks.action", { task_id: t.task_id, tindakan: a, version: t.version, note: dt.note, progress: dt.progress != null ? Number(dt.progress) : undefined, status: dt.status }, (LT_TINDAKAN[a] || "Tindakan") + " berjaya.") });
+      onSubmit: async (dt) => {
+        const bukti = inpBukti && inpBukti.files ? [...inpBukti.files] : [];
+        if (bukti.length) { toast("Memuat naik " + bukti.length + " lampiran…"); const n = await ltMuatNaikFail(t.task_id, bukti, "Bukti semasa hantar semakan"); toast(n + " lampiran dimuat naik."); }
+        ltCall("tasks.action", { task_id: t.task_id, tindakan: a, version: t.version, note: dt.note, progress: dt.progress != null ? Number(dt.progress) : undefined, status: dt.status }, (LT_TINDAKAN[a] || "Tindakan") + " berjaya.");
+      } });
+    const inpBukti = modal.querySelector('input[name="bukti"]');
+    if (inpBukti) { inpBukti.setAttribute("accept", "image/*,application/pdf"); inpBukti.multiple = true; }
   }
 
   function viewTasks() {
@@ -1955,6 +2030,13 @@
     "live-detail"(el) { openLiveDetail(el.dataset.kunci); },
     "live-order"(el) { openLiveOrder(el.dataset.id); },
     "lt-new"() { liveTaskNew(); },
+    "lmp-tambah"(el) { ltLampiranTambah(el.dataset.task); },
+    "lmp-lihat"(el) { ltLampiranLihat(el.dataset.id); },
+    "lmp-sorok"(el) {
+      const papar = !!el.dataset.papar, task = el.dataset.task, id = el.dataset.id;
+      openForm({ live: true, title: (papar ? "Papar semula " : "Sorok ") + id, submit: papar ? "Papar" : "Sorok", fields: [{ name: "sebab", label: "Sebab", type: "textarea", required: true, full: true, maxlength: 200 }],
+        onSubmit: async (d) => { try { await LIVE.api("tasks.lampiran.hide", { lampiran_id: id, sebab: d.sebab, papar: papar }); toast("Dikemas kini."); } catch (e) { toast(e.message); } liveTaskOpen(task); } });
+    },
     "qt-reload"() { qtReload(); },
     "qt-baru"() { QT.edit = qtKosong(QT.cfg.templat.COMSTRA); refresh(); },
     "qt-buka"(el) { qtBuka(el.dataset.id); },
