@@ -1210,9 +1210,218 @@
       '<div class="grid" style="margin-top:16px"><section class="panel c12">' + panelHead(tab) + '<div class="toolbar">' + chips("dbkl.tab", tabs) + "</div>" + body + "</section></div>";
   }
 
+  /* ========== Pusat Dokumen (pautan Canva / Google Drive / lain) ========== */
+  /* Mod LIVE: docs.list / docs.save / docs.hide (tab DOKUMEN, SCE-DEV-TASKS).
+   * Tanpa login (?demo=1): PRATONTON sahaja, rekod dalam memori tab ini, tiada apa disimpan. */
+  const DK = { list: null, kategori: null, bolehTambah: false, bolehPaparSemula: false, err: null, busy: false };
+  const DK_KAT = ["Surat Jemputan", "Surat", "Laporan", "Quotation / Invois", "Lukisan / Design", "Gambar", "Kontrak", "Lain-lain"];
+  const DK_MAKS_PDF = 5 * 1024 * 1024;
+  const dkCaraLalai = (kat) => (kat === "Laporan" ? "PAUTAN" : "PDF"); // Keputusan pemilik: Laporan guna pautan Canva; surat jemputan dll. PDF
+  const DK_RUJ = { UMUM: "Umum (syarikat)", PROGRAM: "Program / Sesi", SIGNBOARD: "Order Signboard", TUGASAN: "Tugasan" };
+  const DK_JENIS = { CANVA_EMBED: ["Canva", "Preview dalam app"], CANVA: ["Canva", "Buka di Canva"], DRIVE: ["Google Drive", "Preview dalam app"], DRIVE_FOLDER: ["Folder Drive", "Preview dalam app"], GOOGLE_DOC: ["Google Docs", "Preview dalam app"], LINK: ["Pautan", "Buka pautan"], PDF: ["PDF", "Preview dalam app"], QUOTATION: ["Quotation", "Buka quotation"] };
+  const dkSaiz = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB");
+  const dkDemo = () => !LIVE_USER;
+  const dkTarikh = (iso) => { const t = new Date(iso); return iso && !isNaN(t) ? String(t.getDate()).padStart(2, "0") + "/" + String(t.getMonth() + 1).padStart(2, "0") + "/" + t.getFullYear() : ""; };
+  const dkUrus = () => (LIVE_USER ? ["SUPER_ADMIN", "MANAGEMENT"].includes(LIVE_USER.role) : true);
+  /** Sama dengan kenalPautan_ di backend (Dokumen.js). URL iframe dibina semula daripada ID yang disahkan. */
+  function dkKenal(url) {
+    const u = String(url || "").trim();
+    if (!u || u.length > 1000 || /[\s<>"'`\\]/.test(u)) return null;
+    let m = /^https:\/\/(?:www\.)?canva\.com\/design\/([A-Za-z0-9_-]{6,40})\/([A-Za-z0-9_-]{6,60})\/(?:view|edit|watch)(\?[^#]*)?(#.*)?$/.exec(u);
+    if (m) { const e = /[?&]embed(?:=|&|$)/.test(m[3] || ""); return { jenis: e ? "CANVA_EMBED" : "CANVA", embed: e ? "https://www.canva.com/design/" + m[1] + "/" + m[2] + "/view?embed" : "" }; }
+    if (/^https:\/\/(?:www\.)?canva\.(?:com|link)\/[^#]*$/.test(u)) return { jenis: "CANVA", embed: "" };
+    m = /^https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,100})(?:[/?#].*)?$/.exec(u);
+    if (m) return { jenis: "DRIVE", embed: "https://drive.google.com/file/d/" + m[1] + "/preview" };
+    m = /^https:\/\/drive\.google\.com\/(?:open|uc)\?(?:[^#]*&)?id=([A-Za-z0-9_-]{10,100})(?:[&#].*)?$/.exec(u);
+    if (m) return { jenis: "DRIVE", embed: "https://drive.google.com/file/d/" + m[1] + "/preview" };
+    m = /^https:\/\/drive\.google\.com\/drive\/(?:u\/\d\/)?folders\/([A-Za-z0-9_-]{10,100})(?:[/?#].*)?$/.exec(u);
+    if (m) return { jenis: "DRIVE_FOLDER", embed: "https://drive.google.com/embeddedfolderview?id=" + m[1] + "#grid" };
+    m = /^https:\/\/docs\.google\.com\/(document|spreadsheets|presentation)\/d\/([A-Za-z0-9_-]{10,100})(?:[/?#].*)?$/.exec(u);
+    if (m) return { jenis: "GOOGLE_DOC", embed: "https://docs.google.com/" + m[1] + "/d/" + m[2] + "/preview" };
+    if (/^https?:\/\/[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?::\d{2,5})?(?:[/?#].*)?$/.test(u)) return { jenis: "LINK", embed: "" };
+    return null;
+  }
+  const dkPetunjuk = (url) => {
+    if (!String(url || "").trim()) return "Tampal pautan Canva, Google Drive / Docs, atau pautan lain (https://).";
+    const p = dkKenal(url);
+    if (!p) return "⚠ Pautan tidak sah. Mesti bermula dengan https:// dan tanpa ruang.";
+    if (p.jenis === "CANVA_EMBED") return "✓ Canva (embed): boleh dipreview dalam app. Design ini boleh dilihat oleh sesiapa yang ada pautan.";
+    if (p.jenis === "CANVA") return "Canva (pautan biasa): dipapar sebagai kad, dibuka di Canva. Untuk preview: Canva → Share → More → Embed → salin Smart embed link.";
+    if (p.jenis === "LINK") return "Pautan biasa: dipapar sebagai kad dengan butang Buka.";
+    return "✓ " + DK_JENIS[p.jenis][0] + ": boleh dipreview dalam app (pelihat mesti ada akses ke fail itu dalam akaun Google).";
+  };
+  function dkLoad() {
+    if (DK.busy) return;
+    if (dkDemo()) { DK.list = DK.list || []; DK.kategori = DK_KAT; DK.bolehTambah = true; DK.bolehPaparSemula = true; return; }
+    DK.busy = true;
+    LIVE.api("docs.list")
+      .then((o) => { DK.list = o.dokumen; DK.kategori = o.kategori; DK.bolehTambah = o.bolehTambah; DK.bolehPaparSemula = o.bolehPaparSemula; DK.err = null; })
+      .catch((e) => { DK.err = e.message; })
+      .finally(() => { DK.busy = false; if (currentRoute() === "documents") refresh(); });
+  }
+  function dkReload() { DK.list = null; DK.err = null; dkLoad(); refresh(); }
+
+  function viewDokumen() {
+    const tag = dkDemo() ? '<span class="live-tag">Pratonton · tiada simpanan</span>' : liveTagDev;
+    const head = (x) => pageHead("Documents", "Pusat dokumen SCE: simpan pautan Canva, Google Drive dan lain-lain mengikut program, order signboard atau tugasan.", (x || "") + " " + tag);
+    if (DK.err) return head() + '<section class="panel"><div class="empty"><p>' + esc(DK.err) + '</p><button type="button" class="btn" data-action="dk-reload">Cuba lagi</button></div></section>';
+    if (!DK.list) { dkLoad(); if (!DK.list) return head() + '<section class="panel"><div class="empty" role="status"><p>Memuatkan…</p></div></section>'; }
+    const tambah = DK.bolehTambah ? btn("+ Tambah Dokumen", "dk-tambah", "primary") : "";
+    if (!f("dk.kat")) state.filters["dk.kat"] = "Semua";
+    const k = f("dk.kat"), rj = f("dk.ruj"), q = f("dk.q").toLowerCase();
+    const list = DK.list.filter((d) => (k === "Semua" || d.kategori === k) && (!rj || d.rujukan_jenis === rj) && (!q || [d.tajuk, d.rujukan, d.catatan, d.oleh].join(" ").toLowerCase().includes(q)));
+    const kad = (d) => {
+      const j = DK_JENIS[d.jenis] || DK_JENIS.LINK, p = dkKenal(d.url), boleh = (p && p.embed) || d.jenis === "PDF";
+      return '<article class="dk-kad' + (d.tersembunyi ? " tersembunyi" : "") + '">' +
+        '<button type="button" class="dk-muka dk-' + esc((d.jenis || "LINK").toLowerCase()) + '" data-action="dk-lihat" data-id="' + esc(d.doc_id) + '" aria-label="Lihat ' + esc(d.tajuk) + '"><span class="dk-logo">' + esc(j[0]) + '</span><span class="dk-mod">' + (boleh ? "▶ Preview" : "↗ " + esc(j[1])) + "</span></button>" +
+        '<div class="dk-isi"><h3 class="dk-tajuk">' + esc(d.tajuk) + "</h3>" +
+          '<p class="small"><span class="badge neutral">' + esc(d.kategori) + "</span>" + (d.akses === "PENGURUSAN" ? ' <span class="badge warn">Pengurusan</span>' : "") + (d.tersembunyi ? ' <span class="badge bad">Tersembunyi</span>' : "") + "</p>" +
+          (d.auto ? '<p class="small muted">' + (d.rujukan ? "No. Ruj. " + esc(d.rujukan) : "Quotation muktamad") + "</p>" : '<p class="small muted">' + esc(DK_RUJ[d.rujukan_jenis] || "Umum") + (d.rujukan ? " · " + esc(d.rujukan) : "") + "</p>") +
+          (d.jenis === "PDF" && d.nama_fail ? '<p class="small muted dk-url">' + esc(d.nama_fail) + (d.saiz_bait ? " · " + dkSaiz(d.saiz_bait) : "") + "</p>" : "") +
+          '<p class="small muted">' + esc(namaPapar(d.oleh || "")) + " · " + esc(dkTarikh(d.updated_at || d.created_at)) + "</p></div></article>";
+    };
+    return head(tambah) +
+      (dkDemo() ? note("Pratonton: dokumen yang ditambah di sini hanya dalam tab ini dan hilang bila dimuat semula. Tiada apa-apa dihantar ke server. Dalam mod sebenar, quotation yang MUKTAMAD juga muncul di sini secara automatik (kategori Quotation / Invois).") : "") +
+      '<section class="panel">' + panelHead("Semua Dokumen", list.length + " daripada " + DK.list.length + " dokumen", "", tag) +
+      '<div class="toolbar">' + searchBox("dk.q", "Cari tajuk, rujukan, catatan") + filterSelect("dk.ruj", "Dipaut kepada", [["", "Semua"]].concat(Object.entries(DK_RUJ))) + "</div>" +
+      '<div class="toolbar">' + chips("dk.kat", ["Semua"].concat(DK.kategori || DK_KAT)) + "</div>" +
+      (list.length ? '<div class="dk-grid">' + list.map(kad).join("") + "</div>" : empty(DK.list.length ? "Tiada dokumen sepadan dengan penapis ini." : "Belum ada dokumen. Tambah pautan Canva atau Google Drive yang pertama.", tambah)) +
+      "</section>";
+  }
+
+  function dkBorang(d) {
+    const ada = !!d, opsRuj = [];
+    (LD.order || []).forEach((o) => opsRuj.push(o.id + (o.tetuan ? " · " + o.tetuan : "")));
+    (LD.program || []).forEach((p) => opsRuj.push([p.noFail, p.tetuan].filter(Boolean).join(" · ")));
+    ((LD.tasks && LD.tasks.tasks) || []).forEach((t) => opsRuj.push(t.task_id + " · " + t.title));
+    const fields = [
+      { name: "kategori", label: "Kategori", type: "select", required: true, options: [["", "Pilih kategori…"]].concat(DK.kategori || DK_KAT), value: ada ? d.kategori : "" },
+      { name: "tajuk", label: "Tajuk dokumen", required: true, maxlength: 150, value: ada ? d.tajuk : "" },
+      { name: "cara", label: "Cara simpan", type: "select", full: true, options: [["PDF", "Muat naik fail PDF (maks 5 MB)"], ["PAUTAN", "Pautan Canva / Google Drive"]], value: ada ? (d.jenis === "PDF" ? "PDF" : "PAUTAN") : "PDF" },
+      { name: "fail", label: ada && d.jenis === "PDF" ? "Fail PDF (pilih hanya jika mahu ganti)" : "Fail PDF", type: "file", full: true, help: ada && d.nama_fail ? "Fail semasa: " + d.nama_fail : "Contoh: surat jemputan yang telah ditandatangani." },
+      { name: "url", label: "Pautan", type: "url", full: true, maxlength: 1000, value: ada ? d.url : "", help: dkPetunjuk(ada ? d.url : "") },
+      { name: "rujukan_jenis", label: "Dipaut kepada", type: "select", options: Object.entries(DK_RUJ), value: ada ? d.rujukan_jenis : "UMUM" },
+      { name: "rujukan", label: "Rujukan (ID order / program / tugasan)", maxlength: 120, value: ada ? d.rujukan : "", help: "Kosongkan jika Umum." },
+      { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 500, value: ada ? d.catatan : "" }
+    ];
+    if (dkUrus()) fields.push({ name: "akses", label: "Siapa boleh lihat", type: "select", options: [["SEMUA", "Semua pengguna SCE CENTRAL"], ["PENGURUSAN", "Pengurusan sahaja (SA / MG + pencipta)"]], value: ada ? d.akses : "SEMUA" });
+    openForm({ live: !dkDemo(), title: ada ? "Ubah " + d.doc_id : "Tambah Dokumen", submit: ada ? "Simpan" : "Tambah", fields: fields,
+      intro: dkDemo() ? note("Pratonton sahaja: tiada apa disimpan.") : "",
+      onSubmit: async (v) => {
+        const cara = v.cara === "PAUTAN" ? "PAUTAN" : "PDF";
+        const isi = { doc_id: ada ? d.doc_id : "", cara: cara, tajuk: v.tajuk, kategori: v.kategori, url: cara === "PAUTAN" ? v.url : "", rujukan_jenis: v.rujukan_jenis, rujukan: v.rujukan_jenis === "UMUM" ? "" : v.rujukan, catatan: v.catatan, akses: v.akses || (ada ? d.akses : "SEMUA") };
+        const p = cara === "PAUTAN" ? dkKenal(isi.url) : { jenis: "PDF" };
+        if (!p) { toast("Pautan tidak sah. Mesti bermula dengan https://."); return; }
+        const fail = cara === "PDF" && v.fail && v.fail.size ? v.fail : null;
+        if (cara === "PDF" && !fail && !(ada && d.jenis === "PDF")) { toast("Sila pilih fail PDF."); return; }
+        if (fail && fail.type !== "application/pdf" && !/\.pdf$/i.test(fail.name)) { toast("Fail mesti PDF."); return; }
+        if (fail && fail.size > DK_MAKS_PDF) { toast("Fail terlalu besar (" + dkSaiz(fail.size) + "). Maks 5 MB."); return; }
+        if (isi.rujukan_jenis !== "UMUM" && !isi.rujukan) { toast("Sila isi rujukan, atau pilih Umum."); return; }
+        let bait = null;
+        if (fail) {
+          bait = new Uint8Array(await fail.arrayBuffer());
+          if (String.fromCharCode.apply(null, bait.slice(0, 5)) !== "%PDF-") { toast("Kandungan fail bukan PDF."); return; }
+          let bin = ""; for (let i = 0; i < bait.length; i += 32768) bin += String.fromCharCode.apply(null, bait.subarray(i, i + 32768));
+          Object.assign(isi, { data: btoa(bin), mime: "application/pdf", nama_fail: fail.name });
+        }
+        if (dkDemo()) {
+          const kini = new Date().toISOString(), tambahan = { jenis: p.jenis, updated_at: kini };
+          if (fail) Object.assign(tambahan, { _blob: URL.createObjectURL(new Blob([bait], { type: "application/pdf" })), nama_fail: fail.name, saiz_bait: fail.size });
+          delete isi.data;
+          if (ada) Object.assign(d, isi, tambahan);
+          else DK.list.unshift(Object.assign(isi, tambahan, { doc_id: "DOK-PRATONTON-" + String(DK.list.length + 1).padStart(3, "0"), oleh: "Pratonton", created_at: kini, bolehUbah: true }));
+          toast(ada ? "Dikemas kini (pratonton)." : "Ditambah (pratonton, tidak disimpan)."); refresh(); return;
+        }
+        if (fail) toast("Memuat naik " + fail.name + "…");
+        try { const o = await LIVE.api("docs.save", isi); toast((ada ? "Dikemas kini: " : "Disimpan: ") + o.doc_id); } catch (e) { toast(e.message); }
+        dkReload();
+      } });
+    const u = modal.querySelector("[name=url]"), help = u && u.closest(".field").querySelector(".field-help");
+    if (u && help) u.addEventListener("input", () => { help.textContent = dkPetunjuk(u.value); });
+    const caraEl = modal.querySelector("[name=cara]"), failEl = modal.querySelector("[name=fail]"), katEl = modal.querySelector("[name=kategori]");
+    if (failEl) failEl.setAttribute("accept", "application/pdf,.pdf");
+    const kemasCara = () => {
+      const pdf = caraEl.value === "PDF";
+      failEl.closest(".field").hidden = !pdf; u.closest(".field").hidden = pdf; u.required = !pdf;
+    };
+    caraEl.addEventListener("change", kemasCara);
+    if (!ada) katEl.addEventListener("change", () => { if (katEl.value) { caraEl.value = dkCaraLalai(katEl.value); kemasCara(); } });
+    kemasCara();
+    const rjEl = modal.querySelector("[name=rujukan_jenis]"), rEl = modal.querySelector("[name=rujukan]");
+    if (rEl && opsRuj.length) {
+      const dl = document.createElement("datalist"); dl.id = "dk-ruj-senarai";
+      opsRuj.slice(0, 400).forEach((x) => { const o = document.createElement("option"); o.value = x; dl.appendChild(o); });
+      modal.querySelector("form").appendChild(dl); rEl.setAttribute("list", dl.id);
+    }
+    const kemasRuj = () => { if (rEl) { rEl.disabled = rjEl.value === "UMUM"; if (rEl.disabled) rEl.value = ""; } };
+    if (rjEl) { rjEl.addEventListener("change", kemasRuj); kemasRuj(); }
+  }
+
+  function dkLihat(id) {
+    const d = (DK.list || []).find((x) => x.doc_id === id); if (!d) return;
+    if (d.jenis === "QUOTATION") {
+      openInfo({ title: d.tajuk, body: note("Quotation ini telah MUKTAMAD dan disimpan secara automatik dalam Documents. Klik Buka Quotation untuk melihat, mencetak atau memuat turun (Save as PDF).") +
+        '<dl class="dk-info"><dt>No. Rujukan</dt><dd>' + esc(d.rujukan || "—") + "</dd><dt>Dimuktamadkan</dt><dd>" + esc(dkTarikh(d.updated_at)) + "</dd></dl>",
+        actions: btn("Buka Quotation", "dk-quo", "primary", ' data-id="' + esc(d.quo_id) + '"') + " " });
+      return;
+    }
+    if (d.jenis === "PDF") { dkLihatPdf(d); return; }
+    const p = dkKenal(d.url), j = DK_JENIS[d.jenis] || DK_JENIS.LINK;
+    const buka = p ? '<a class="btn primary" href="' + esc(d.url) + '" target="_blank" rel="noopener noreferrer">' + (d.jenis && d.jenis.indexOf("CANVA") === 0 ? "Buka di Canva ↗" : "Buka di tab baharu ↗") + "</a> " : "";
+    const ubah = d.bolehUbah ? btn("Ubah", "dk-ubah", "", ' data-id="' + esc(d.doc_id) + '"') + " " + (d.tersembunyi ? "" : btn("Sorok", "dk-sorok", "", ' data-id="' + esc(d.doc_id) + '"')) + " " : "";
+    const papar = d.tersembunyi && DK.bolehPaparSemula ? btn("Papar semula", "dk-sorok", "", ' data-id="' + esc(d.doc_id) + '" data-papar="1"') + " " : "";
+    let badan;
+    if (p && p.embed) {
+      badan = '<div class="dk-bingkai' + (d.jenis === "CANVA_EMBED" ? " dk-canva" : "") + '"><iframe src="' + esc(p.embed) + '" title="' + esc(d.tajuk) + '" loading="lazy" allow="fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"></iframe></div>' +
+        '<p class="small muted" style="margin-top:8px">' + (d.jenis === "CANVA_EMBED" ? "Preview Canva (embed). Design ini boleh dilihat oleh sesiapa yang ada pautan." : "Jika preview kosong atau minta log masuk: log masuk Google dengan akaun yang ada akses ke fail ini, atau minta pemilik fail berkongsi dengan emel anda.") + "</p>";
+    } else {
+      badan = '<div class="dk-pautan-kad"><span class="dk-logo">' + esc(j[0]) + "</span><div><strong>" + esc(d.tajuk) + '</strong><p class="small muted dk-url">' + esc(d.url) + "</p>" +
+        (d.jenis === "CANVA" ? '<p class="small">Preview dalam app belum aktif untuk design ini. Untuk aktifkan: buka design di Canva → <b>Share</b> → <b>More</b> → <b>Embed</b> → salin <b>Smart embed link</b>, kemudian Ubah dokumen ini dan tampal pautan itu.</p>' : "") + "</div></div>";
+    }
+    const info = '<dl class="dk-info"><dt>Kategori</dt><dd>' + esc(d.kategori) + "</dd><dt>Dipaut kepada</dt><dd>" + esc(DK_RUJ[d.rujukan_jenis] || "Umum") + (d.rujukan ? " · " + esc(d.rujukan) : "") + "</dd><dt>Ditambah oleh</dt><dd>" + esc(namaPapar(d.oleh || "—")) + " · " + esc(dkTarikh(d.created_at)) + "</dd>" + (d.catatan ? "<dt>Catatan</dt><dd>" + esc(d.catatan).replace(/\n/g, "<br>") + "</dd>" : "") + "</dl>";
+    openInfo({ title: d.doc_id + " · " + d.tajuk, body: badan + info, actions: papar + ubah + buka });
+    modal.classList.add("modal-slip"); modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true });
+  }
+
+  const dkButangUrus = (d) => (d.bolehUbah ? btn("Ubah", "dk-ubah", "", ' data-id="' + esc(d.doc_id) + '"') + " " + (d.tersembunyi ? "" : btn("Sorok", "dk-sorok", "", ' data-id="' + esc(d.doc_id) + '"')) + " " : "") +
+    (d.tersembunyi && DK.bolehPaparSemula ? btn("Papar semula", "dk-sorok", "", ' data-id="' + esc(d.doc_id) + '" data-papar="1"') + " " : "");
+  const dkInfo = (d) => '<dl class="dk-info"><dt>Kategori</dt><dd>' + esc(d.kategori) + "</dd><dt>Dipaut kepada</dt><dd>" + esc(DK_RUJ[d.rujukan_jenis] || "Umum") + (d.rujukan ? " · " + esc(d.rujukan) : "") + "</dd>" + (d.nama_fail ? "<dt>Fail</dt><dd>" + esc(d.nama_fail) + (d.saiz_bait ? " · " + dkSaiz(d.saiz_bait) : "") + "</dd>" : "") + "<dt>Ditambah oleh</dt><dd>" + esc(namaPapar(d.oleh || "—")) + " · " + esc(dkTarikh(d.created_at)) + "</dd>" + (d.catatan ? "<dt>Catatan</dt><dd>" + esc(d.catatan).replace(/\n/g, "<br>") + "</dd>" : "") + "</dl>";
+  /** PDF: dimuat dari Drive app (mod sebenar) atau dari memori (pratonton), dipapar dalam pelihat PDF pelayar. */
+  async function dkLihatPdf(d) {
+    const tajuk = d.doc_id + " · " + d.tajuk;
+    openInfo({ title: tajuk, body: '<p class="muted" role="status">Memuatkan PDF…</p>' });
+    let url = d._blob || "", bebas = false;
+    if (!url) {
+      try {
+        const o = await LIVE.api("docs.file", { doc_id: d.doc_id });
+        if (o.mime !== "application/pdf" || !/^[A-Za-z0-9+/=]+$/.test(o.data)) throw new Error("Data fail tidak sah.");
+        url = URL.createObjectURL(new Blob([Uint8Array.from(atob(o.data), (c) => c.charCodeAt(0))], { type: "application/pdf" })); bebas = true;
+      } catch (e) { openInfo({ title: tajuk, body: note(e.message), actions: dkButangUrus(d) }); return; }
+    }
+    if (!modal.open) { if (bebas) URL.revokeObjectURL(url); return; }
+    const nama = d.nama_fail || "dokumen.pdf";
+    openInfo({ title: tajuk, body: '<div class="dk-bingkai"><iframe src="' + esc(url) + '" title="' + esc(d.tajuk) + '"></iframe></div>' + dkInfo(d),
+      actions: dkButangUrus(d) + '<a class="btn" href="' + esc(url) + '" download="' + esc(nama) + '">Muat turun</a> <a class="btn primary" href="' + esc(url) + '" target="_blank" rel="noopener">Buka di tab baharu ↗</a> ' });
+    modal.classList.add("modal-slip");
+    setTimeout(() => modal.addEventListener("close", () => { modal.classList.remove("modal-slip"); if (bebas) setTimeout(() => URL.revokeObjectURL(url), 60000); }, { once: true }), 0); // selepas acara close daripada modal "Memuatkan"
+  }
+
+  function dkSorok(id, papar) {
+    const d = (DK.list || []).find((x) => x.doc_id === id); if (!d) return;
+    openForm({ live: !dkDemo(), title: (papar ? "Papar semula " : "Sorok ") + id, submit: papar ? "Papar" : "Sorok", fields: [{ name: "sebab", label: "Sebab", type: "textarea", required: true, full: true, maxlength: 200 }],
+      intro: papar ? "" : note("Dokumen tidak dipadam. Hanya SUPER ADMIN boleh melihat dan memaparkannya semula. Fail asal di Canva / Drive tidak terjejas."),
+      onSubmit: async (v) => {
+        if (String(v.sebab || "").length < 5) { toast("Sebab wajib (min 5 aksara)."); return; }
+        if (dkDemo()) { d.tersembunyi = !papar; toast("Dikemas kini (pratonton)."); refresh(); return; }
+        try { await LIVE.api("docs.hide", { doc_id: id, sebab: v.sebab, papar: !!papar }); toast("Dikemas kini."); } catch (e) { toast(e.message); }
+        dkReload();
+      } });
+  }
+
   /* ========== Paparan: Documents & Reports ========== */
   function docBtn(d) { return '<button type="button" class="text-link" data-action="open-doc" data-id="' + d.id + '">' + esc(d.name) + "</button>"; }
   function viewDocuments() {
+    return viewDokumen(); // Pusat dokumen sebenar (16/11/2026); kod contoh lama di bawah tidak digunakan lagi oleh laluan ini.
     const all = DAL.documents(), mode = f("documents.mode"), projects = DAL.projects().filter((p) => all.some((d) => d.project === p.id));
     const uploadBtn = capBtn("doc.upload", "Muat Naik Dokumen", "new-doc", "primary");
     const cols = [{ h: "Nama", r: docBtn }, { h: "Kategori", r: (d) => esc(d.category) }, { h: "Projek", r: (d) => esc(d.project ? projectName(d.project) : "Syarikat") }, { h: "Pemilik", r: (d) => esc(d.owner) }, { h: "Versi", r: (d) => "v" + d.version }, { h: "Tarikh", r: (d) => '<span class="tnum">' + fmtDate(d.date) + "</span>" }, { h: "Saiz", num: true, r: (d) => esc(d.size) }, { h: "Tindakan", r: (d) => btn("Muat turun", "dl-doc", "small", ' data-id="' + d.id + '"') }];
@@ -2091,6 +2300,12 @@
       openForm({ live: true, title: (papar ? "Papar semula " : "Sorok ") + id, submit: papar ? "Papar" : "Sorok", fields: [{ name: "sebab", label: "Sebab", type: "textarea", required: true, full: true, maxlength: 200 }],
         onSubmit: async (d) => { try { await LIVE.api("tasks.lampiran.hide", { lampiran_id: id, sebab: d.sebab, papar: papar }); toast("Dikemas kini."); } catch (e) { toast(e.message); } liveTaskOpen(task); } });
     },
+    "dk-reload"() { dkReload(); },
+    "dk-tambah"() { dkBorang(null); },
+    "dk-lihat"(el) { dkLihat(el.dataset.id); },
+    "dk-ubah"(el) { dkBorang((DK.list || []).find((x) => x.doc_id === el.dataset.id)); },
+    "dk-sorok"(el) { dkSorok(el.dataset.id, !!el.dataset.papar); },
+    "dk-quo"(el) { closeModal(); location.hash = "#quotation"; qtBuka(el.dataset.id); },
     "qt-reload"() { qtReload(); },
     "qt-baru"() { QT.edit = qtKosong(QT.cfg.templat.COMSTRA); refresh(); },
     "qt-buka"(el) { qtBuka(el.dataset.id); },
