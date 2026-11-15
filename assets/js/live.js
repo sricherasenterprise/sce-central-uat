@@ -4,22 +4,27 @@
  *  - login/logout sebenar (emel + password) ke projek Apps Script "SCE CENTRAL - DEV" (baca sahaja)
  *  - api(action) untuk data sebenar Program dan Order Signboard
  * Mod pratonton UI dengan data contoh sahaja: tambah ?demo=1 pada URL.
- * Token disimpan dalam sessionStorage (hilang apabila tab ditutup).
+ * Token disimpan dalam localStorage supaya dikongsi antara tab (contoh pautan emel dibuka dalam tab baharu).
+ * Tamat tempoh tetap dikawal server (2 jam tanpa aktiviti, 12 jam mutlak). Log keluar di satu tab = semua tab.
  */
 (function () {
   "use strict";
 
   // Versi aplikasi yang dipaparkan kepada pengguna. Naikkan bersama ?v= dalam index.html setiap kali dikemas kini.
-  const VERSI = "2026.11.15-5";
+  const VERSI = "2026.11.16-1";
   const API_URL = "https://script.google.com/macros/s/AKfycbxYxl2vb0bc1gCQ0RqsyOXHvydXcmQy8m59bfqpyAXkWXQTFpM9Z_zLDGkE5IyLjhag/exec";
   const K_TOKEN = "sce-live-token", K_USER = "sce-live-user", K_MT = "sce-live-mesti-tukar";
   const ROLE_LABEL = { SUPER_ADMIN: "SUPER ADMIN", MANAGEMENT: "MANAGEMENT", PROJECT_MANAGER: "PROJECT MANAGER", STAFF: "STAFF", VIEWER: "VIEWER" };
 
   const ss = {
-    get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
-    set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) { /* tiada storan */ } },
-    del(k) { try { sessionStorage.removeItem(k); } catch (e) { /* tiada storan */ } }
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* tiada storan */ } },
+    del(k) { try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch (e) { /* tiada storan */ } }
   };
+  // Pindah sesi lama (sessionStorage) ke localStorage sekali sahaja.
+  try { ["sce-live-token", "sce-live-user", "sce-live-mesti-tukar"].forEach((k) => { const v = sessionStorage.getItem(k); if (v && !localStorage.getItem(k)) localStorage.setItem(k, v); sessionStorage.removeItem(k); }); } catch (e) { /* tiada storan */ }
+  // Log keluar / log masuk di tab lain: muat semula tab ini.
+  window.addEventListener("storage", (ev) => { if (ev.key === "sce-live-token" && (ev.oldValue || "") !== (ev.newValue || "")) location.reload(); });
   const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const demo = new URLSearchParams(location.search).get("demo") === "1";
 

@@ -577,3 +577,16 @@ button.pop-link { width: 100%; text-align: left; background: none; border: 0; fo
 .qt-r.besar .qt-lbl { color: var(--text); font-weight: 700; letter-spacing: .03em; }
 .qt-r.besar b { font-size: 20px; color: var(--teal-strong); }
 @media (max-width: 640px) { .qt-resit { max-width: none; } }
+
+/* Kotak tarikh hh/bb/tttt */
+.tarikh-wrap { position: relative; display: flex; gap: 4px; align-items: center; }
+.tarikh-wrap input[data-tarikh] { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+.tarikh-pick { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.tarikh-btn { flex: none; min-width: 40px; min-height: 40px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); cursor: pointer; }
+.tarikh-btn:disabled { opacity: .5; cursor: default; }
+
+/* Kotak Tugasan Saya (fokus) */
+.panel.panel-fokus { border: 1px solid var(--teal); border-left: 6px solid var(--teal); background: linear-gradient(180deg, var(--teal-tint) 0%, var(--surface) 70%); box-shadow: 0 4px 14px rgba(8, 126, 120, .12); }
+.panel-fokus .panel-title h2 { color: var(--teal-strong); }
+.panel-fokus .live-list li { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); padding: var(--s3); margin-bottom: var(--s2); }
+.panel-fokus .live-list li:last-child { border-bottom: 1px solid var(--border); }

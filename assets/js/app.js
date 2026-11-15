@@ -568,7 +568,7 @@
   const kpiRow = (cards, four) => '<div class="kpi-head"><h2>Petunjuk Utama</h2><span class="muted small">Semua angka ialah data contoh, bukan angka sebenar syarikat.</span></div><section class="kpis' + (four ? " kpis-4" : "") + '" aria-label="KPI">' + cards.join("") + "</section>";
   function banner(lead, roleLabel) {
     const hour = +new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", hour12: false }).format(new Date());
-    const greet = hour < 12 ? "Selamat pagi" : hour < 14 ? "Selamat tengah hari" : hour < 19 ? "Selamat petang" : "Selamat malam";
+    const greet = hour < 12 ? "Selamat Pagi" : hour < 14 ? "Selamat Tengah Hari" : hour < 19 ? "Selamat Petang" : "Selamat Malam";
     const dayName = DAYS[new Date(TODAY + "T00:00:00Z").getUTCDay()];
     const quick = [["project.request", POLICY.scope === "company" ? "+ Projek Baharu" : "+ Mohon Projek", "new-project", "primary"], ["task.assign", "+ Tugasan Baharu", "new-task"], ["program.manage", "+ Event Baharu", "new-event"], ["doc.upload", "Muat Naik Dokumen", "new-doc"], ["dbkl.manage", "Daftar Permit DBKL", "new-permit"], ["instruction.send", "Arahan Pengurusan", "new-instruction"]].filter((q) => can(q[0]));
     return '<section class="banner" aria-labelledby="welcome"><p class="banner-eyebrow">' + dayName + ", " + fmtDate(TODAY) + " · " + esc(D.settings.company) + " · " + esc(roleLabel) + '</p><h1 id="welcome">' + greet + ", " + esc(me) + '</h1><p class="lead">' + lead + "</p>" +
@@ -716,7 +716,7 @@
   /* UAT: dashboard mod LIVE hanya data sebenar (tiada persona atau panel contoh). */
   function liveDashboard() {
     const hour = +new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", hour12: false }).format(new Date());
-    const greet = hour < 12 ? "Selamat pagi" : hour < 14 ? "Selamat tengah hari" : hour < 19 ? "Selamat petang" : "Selamat malam";
+    const greet = hour < 12 ? "Selamat Pagi" : hour < 14 ? "Selamat Tengah Hari" : hour < 19 ? "Selamat Petang" : "Selamat Malam";
     const dayName = DAYS[new Date(TODAY + "T00:00:00Z").getUTCDay()];
     const u = LIVE_USER, viewer = u.role === "VIEWER", me = u.emel;
     let lead = "Ringkasan operasi syarikat di bawah.", tugasanPanel = "", quick = [];
@@ -732,11 +732,11 @@
       if (LD.tasks && LD.tasks.bolehCipta) quick.push(btn("+ Tugasan Baharu", "lt-new", "primary"));
       quick.push('<a class="btn" href="#tasks">Buka Tasks</a>');
       const senarai = semak.concat(saya.filter((x) => !semak.includes(x))).slice(0, 6);
-      tugasanPanel = '<section class="panel" style="margin-top:16px">' + panelHead("Tugasan Saya", senarai.length + " perlu perhatian", routeLink("tasks", "Semua"), liveTagDev) +
+      tugasanPanel = '<section class="panel panel-fokus" style="margin-top:16px">' + panelHead("Tugasan Saya", senarai.length + " perlu perhatian", routeLink("tasks", "Semua"), liveTagDev) +
         (!LD.tasks ? '<p class="muted small" role="status">Memuatkan…</p>' : senarai.length ? '<ul class="live-list">' + senarai.map((x) => '<li><button type="button" class="text-link tnum" data-action="lt-notif" data-id="' + esc(x.task_id) + '">' + esc(x.task_id) + "</button><span>" + esc(x.title) + " · " + ltBadge(x) + '</span><span class="muted small">' + (x.reviewer === me && x.status === "PENDING_REVIEW" ? "Menunggu semakan anda" : "Tarikh akhir " + (x.due_date ? fmtDate(x.due_date) : "—")) + "</span></li>").join("") + "</ul>" : '<p class="muted small">Tiada tugasan yang perlu perhatian. 👍</p>') + "</section>";
     }
     quick.push('<a class="btn" href="#operations">Buka Operations</a>');
-    return '<section class="banner" aria-labelledby="welcome"><p class="banner-eyebrow">' + dayName + ", " + fmtDate(TODAY) + " · Sri Cheras Enterprise · " + esc(LIVE.roleLabel(u.role)) + (u.jawatan ? " · " + esc(u.jawatan) : "") + '</p><h1 id="welcome">' + greet + ", " + esc(u.nama || u.emel) + '</h1><p class="lead">' + lead + "</p>" +
+    return '<section class="banner" aria-labelledby="welcome"><p class="banner-eyebrow">' + dayName + ", " + fmtDate(TODAY) + " · Sri Cheras Enterprise · " + esc(LIVE.roleLabel(u.role)) + (u.jawatan ? " · " + esc(u.jawatan) : "") + '</p><h1 id="welcome">' + greet + ", " + esc(namaPapar(u.nama || u.emel)) + '</h1><p class="lead">' + lead + "</p>" +
       '<div class="quick"><div class="quick-row">' + quick.join("") + "</div></div></section>" + tugasanPanel + '<div style="margin-top:16px">' + liveOpsSummary() + "</div>";
   }
   const viewDashboard = () => (LIVE_USER ? liveDashboard() : ({ executive: dashExecutive, management: dashManagement, pm: dashPm, staff: dashStaff, viewer: dashViewer }[POLICY.dashboard])());
@@ -830,7 +830,7 @@
       '<div class="toolbar">' + chips("lt.view", views) + searchBox("lt.q", "Cari ID, tajuk, assignee") + "</div>" +
       table([
         { h: "ID", r: (t) => '<button type="button" class="text-link tnum" data-action="lt-open" data-id="' + esc(t.task_id) + '">' + esc(t.task_id) + "</button>" },
-        { h: "Tajuk", r: (t) => esc(t.title) },
+        { h: "Tajuk", r: (t) => esc(t.title) + (t.category ? '<br><span class="small muted">' + esc(t.category) + "</span>" : "") },
         { h: "Assignee", r: (t) => esc(t.nama.primary) },
         { h: "Penyemak", r: (t) => esc(t.nama.reviewer) },
         { h: "Tarikh akhir", r: (t) => (t.due_date ? dueText(t.due_date, ["COMPLETED", "CANCELLED"].includes(t.status)) : "—") },
@@ -843,6 +843,7 @@
     const p = (LD.tasks && LD.tasks.pengguna) || [];
     const opt = p.map((u) => [u.emel, u.nama + " (" + LIVE.roleLabel(u.role) + ")"]);
     openForm({ live: true, title: "Tugasan Baharu", submit: "Cipta Tugasan", intro: note("Penyemak tidak boleh menjadi assignee. Assignee utama perlu menerima tugasan sebelum mula."), fields: [
+      { name: "category", label: "Kategori tugasan", type: "select", required: true, full: true, options: [["", "Pilih kategori…"], "Signboard Kaedah 3A", "Signboard Kaedah 3B", "Communication Strategy", "Sesi Libat Urus (SLU)", "Lain-lain"] },
       { name: "title", label: "Tajuk", required: true, maxlength: 200, full: true },
       { name: "description", label: "Keterangan", type: "textarea", full: true, maxlength: 2000 },
       { name: "primary_assignee", label: "Assignee utama", type: "select", options: opt, required: true },
@@ -850,8 +851,7 @@
       { name: "reviewer", label: "Penyemak", type: "select", options: opt, value: LIVE_USER.emel, required: true },
       { name: "priority", label: "Keutamaan", type: "select", options: [["MEDIUM", "Sederhana"], ["HIGH", "Tinggi"], ["LOW", "Rendah"]], value: "MEDIUM" },
       { name: "start_date", label: "Tarikh mula", type: "date" },
-      { name: "due_date", label: "Tarikh akhir", type: "date", required: true },
-      { name: "category", label: "Kategori", maxlength: 60 }
+      { name: "due_date", label: "Tarikh akhir", type: "date", required: true }
     ], onSubmit: (dt) => { dt.team = (dt.team || []).join(","); ltCall("tasks.create", { data: dt }, "Tugasan dicipta."); } });
   }
   async function liveTaskOpen(id) {
@@ -864,7 +864,7 @@
     openInfo({ title: t.task_id + " · " + t.title, actions: acts, body: detailList([
       ["Status", ltBadge(t)], ["Kemajuan", progress(Number(t.progress) || 0)], ["Assignee utama", esc(t.nama.primary)], ["Ahli tambahan", esc(t.team || "—")],
       ["Pemberi tugas", esc(t.nama.assigned_by)], ["Penyemak", esc(t.nama.reviewer)], ["Tarikh akhir", t.due_date ? dueText(t.due_date, ["COMPLETED", "CANCELLED"].includes(t.status)) : "—"],
-      ["Keterangan", esc(t.description || "—")], ["Sebab tolak", esc(t.reject_reason || "—")]
+      ["Kategori", esc(t.category || "—")], ["Keterangan", esc(t.description || "—")], ["Sebab tolak", esc(t.reject_reason || "—")]
     ]) + '<p class="sub-head" style="margin-top:16px">Lampiran / Bukti</p><div id="lampiran-tugasan" data-task="' + esc(t.task_id) + '"><p class="small muted" role="status">Memuatkan lampiran…</p></div>' +
       '<p class="sub-head" style="margin-top:16px">Sejarah</p>' + timeline(sej, "Tiada sejarah.") });
     state.ltTask = t;
@@ -1416,7 +1416,7 @@
   // Baca nilai borang editor ke dalam GJ.edit (tanpa refresh, supaya fokus tidak hilang semasa menaip).
   function gjBacaBorang() {
     const el = document.getElementById("slip-editor"); if (!el || !GJ.edit) return;
-    ["pekerja_id", "bulan", "tempoh_mula", "tempoh_tamat", "tarikh_gaji"].forEach((k) => { const i = el.querySelector('[name="' + k + '"]'); if (i) GJ.edit[k] = i.value; });
+    ["pekerja_id", "bulan", "tempoh_mula", "tempoh_tamat", "tarikh_gaji"].forEach((k) => { const i = el.querySelector('[name="' + k + '"]'); if (i) GJ.edit[k] = nilaiTarikh(i); });
     GJ_BAHAGIAN.forEach(([k]) => {
       GJ.edit.item[k] = [...el.querySelectorAll('[data-bahagian="' + k + '"] .gj-baris')].map((r) => ({
         label: r.querySelector('[data-f="label"]').value, unit: (r.querySelector('[data-f="unit"]') || {}).value || "", kadar: (r.querySelector('[data-f="kadar"]') || {}).value || "",
@@ -1439,7 +1439,7 @@
     const e = GJ.edit, kunci = e.status === "MUKTAMAD", dis = kunci ? " disabled" : "", t = gjJumlah(e);
     const pek = GJ.cfg.pekerja.map((p) => [p.pekerja_id, p.nama]);
     if (e.pekerja_id && !pek.some(([v]) => v === e.pekerja_id) && e.pekerjaSnap) pek.push([e.pekerja_id, e.pekerjaSnap.nama + " (tidak aktif)"]);
-    const inp = (n, l, type, v, extra) => '<label class="field"><span>' + esc(l) + '</span><input name="' + n + '" type="' + type + '" value="' + esc(v || "") + '"' + dis + (extra || "") + "></label>";
+    const inp = (n, l, type, v, extra) => type === "date" ? '<label class="field"><span>' + esc(l) + "</span>" + tarikhHtml('name="' + n + '"', v, dis) + "</label>" : '<label class="field"><span>' + esc(l) + '</span><input name="' + n + '" type="' + type + '" value="' + esc(v || "") + '"' + dis + (extra || "") + "></label>";
     const program = (LD.program || []).filter((p) => p.tarikh && p.tarikh.slice(0, 7) === e.bulan && p.tahap.event === "siap");
     if (!LD.program && !LD.err.program) liveLoad("program");
     const bahagian = GJ_BAHAGIAN.map(([k, label]) => '<div class="gj-bahagian" data-bahagian="' + k + '"><div class="gj-bahagian-head"><h3>' + esc(label) + "</h3><span data-jumlah=\"" + k + '">RM ' + gjRM(t.j[k]) + "</span></div>" +
@@ -1566,7 +1566,7 @@
   function qtBaca() {
     const el = document.getElementById("quo-editor"); if (!el || !QT.edit) return;
     const e = QT.edit;
-    el.querySelectorAll("[data-q]").forEach((i) => { const p = i.dataset.q.split("."); let o = e; for (let k = 0; k < p.length - 1; k++) { o[p[k]] = o[p[k]] || {}; o = o[p[k]]; } o[p[p.length - 1]] = i.value; });
+    el.querySelectorAll("[data-q]").forEach((i) => { const p = i.dataset.q.split("."); let o = e; for (let k = 0; k < p.length - 1; k++) { o[p[k]] = o[p[k]] || {}; o = o[p[k]]; } o[p[p.length - 1]] = nilaiTarikh(i); });
     e.bahagian = [...el.querySelectorAll(".qt-bahagian")].map((b) => ({ tajuk: b.querySelector("[data-bf=tajuk]").value,
       item: [...b.querySelectorAll(".qt-item")].map((r) => ({ perkara: r.querySelector("[data-f=perkara]").value, keterangan: r.querySelector("[data-f=keterangan]").value, kuantiti: r.querySelector("[data-f=kuantiti]").value, harga: r.querySelector("[data-f=harga]").value })) }));
   }
@@ -1602,6 +1602,7 @@
   function qtEditor() {
     const e = QT.edit, kunci = e.status === "MUKTAMAD", dis = kunci ? " disabled" : "", k = qtKira(e), role = LIVE_USER.role;
     const inp = (q, label, v, extra) => '<label class="field"><span>' + esc(label) + '</span><input data-q="' + q + '" value="' + esc(v || "") + '"' + dis + (extra || "") + "></label>";
+    const tq = (q, label, v) => '<label class="field"><span>' + esc(label) + "</span>" + tarikhHtml('data-q="' + q + '"', v, dis) + "</label>";
     const ta = (q, label, v, rows) => '<label class="field full"><span>' + esc(label) + '</span><textarea data-q="' + q + '" rows="' + (rows || 3) + '"' + dis + ">" + esc(v || "") + "</textarea></label>";
     const t = e.terma || {};
     const bahagian = e.bahagian.map((b, bi) => '<div class="qt-bahagian"><div class="qt-bahagian-head"><span class="qt-no">' + (bi + 1) + '</span><input data-bf="tajuk" value="' + esc(b.tajuk) + '" placeholder="Tajuk bahagian"' + dis + ' aria-label="Tajuk bahagian">' +
@@ -1612,13 +1613,13 @@
       (kunci ? "" : '<select class="inline-select qt-pilih" data-qt-item="' + bi + '" aria-label="Tambah item"><option value="">+ Tambah item…</option>' + qtItemTiada(e, bi).map((x) => '<option value="t' + x.i + '">' + esc(x.perkara.length > 80 ? x.perkara.slice(0, 80) + "…" : x.perkara) + "</option>").join("") + '<option value="kosong">Item kosong (tulis sendiri)</option></select>') + "</div>").join("");
     return pageHead(e.quo_id ? "Quotation " + e.no_quo : "Quotation Baharu", kunci ? "Quotation ini sudah dimuktamadkan dan dikunci." : "Templat " + (e.jenis === "COMSTRA" ? "Communication Strategy" : e.jenis) + ". Ubah item, kuantiti dan harga mengikut projek.", liveTagDev) +
       '<section class="panel" id="quo-editor">' +
-        '<h3 class="sub-head">Maklumat Quotation</h3><div class="form-grid">' + inp("no_quo", "No. Quo. / Invoice", e.no_quo) + inp("no_ruj", "No. Ruj. Syarikat", e.no_ruj) + inp("tarikh", "Tarikh", e.tarikh, ' type="date"') + "</div>" +
+        '<h3 class="sub-head">Maklumat Quotation</h3><div class="form-grid">' + inp("no_quo", "No. Quo. / Invoice", e.no_quo) + inp("no_ruj", "No. Ruj. Syarikat", e.no_ruj) + tq("tarikh", "Tarikh", e.tarikh) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Pelanggan</h3><div class="form-grid">' + inp("pelanggan.nama", "Kepada (nama syarikat + no. pendaftaran)", e.pelanggan.nama) + ta("pelanggan.alamat", "Alamat", e.pelanggan.alamat, 2) + ta("pelanggan.hantarKepada", "Hantar kepada (pilihan)", e.pelanggan.hantarKepada, 2) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Butiran Projek</h3><div class="form-grid">' + ta("pengenalan", "Pengenalan / cadangan pembangunan", e.pengenalan, 5) + inp("untuk", "UNTUK (Tetuan)", e.untuk) + inp("rujukanDbkl", "No. Rujukan DBKL", e.rujukanDbkl) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Item</h3>' + bahagian + (kunci ? "" : '<div style="margin-top:8px"><select class="inline-select qt-pilih" data-qt-bahagian aria-label="Tambah bahagian"><option value="">+ Tambah bahagian…</option>' + qtBahagianTiada(e).map((b) => '<option value="t' + b.i + '">' + esc(b.tajuk) + "</option>").join("") + '<option value="kosong">Bahagian kosong (tulis sendiri)</option></select></div>') +
         '<h3 class="sub-head" style="margin-top:16px">Kos Pentadbiran (Untung)</h3><div class="form-grid">' + inp("untungPeratus", "Peratus daripada jumlah kasar (%)", e.untungPeratus, ' inputmode="decimal"') + ta("untungKeterangan", "Keterangan", e.untungKeterangan, 4) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Pelarasan</h3><div class="form-grid">' + inp("potongan", "Potongan harga (RM)", e.potongan, ' inputmode="decimal"') + inp("cukai", "Cukai (RM)", e.cukai, ' inputmode="decimal"') + inp("lainLain", "Lain-lain perkara (RM)", e.lainLain, ' inputmode="decimal"') + "</div>" +
-        '<h3 class="sub-head" style="margin-top:16px">Terma dan Syarat</h3><div class="form-grid">' + inp("terma.bayaranPeratus", "Bayaran (%)", t.bayaranPeratus) + inp("terma.tempohHari", "Tempoh kerja (hari bekerja)", t.tempohHari) + inp("terma.tarikhAcara", "Tarikh acara", t.tarikhAcara, ' type="date"') + inp("terma.masa", "Masa", t.masa) + ta("terma.tempat", "Tempat acara", t.tempat, 2) + ta("terma.lain", "Terma lain (pilihan)", t.lain, 2) + "</div>" +
+        '<h3 class="sub-head" style="margin-top:16px">Terma dan Syarat</h3><div class="form-grid">' + inp("terma.bayaranPeratus", "Bayaran (%)", t.bayaranPeratus) + inp("terma.tempohHari", "Tempoh kerja (hari bekerja)", t.tempohHari) + tq("terma.tarikhAcara", "Tarikh acara", t.tarikhAcara) + inp("terma.masa", "Masa", t.masa) + ta("terma.tempat", "Tempat acara", t.tempat, 2) + ta("terma.lain", "Terma lain (pilihan)", t.lain, 2) + "</div>" +
         '<div class="qt-resit" aria-label="Ringkasan jumlah">' +
           qtR("", "Jumlah kasar (semua item)", "kasar", k.kasar) +
           qtR("+", 'Kos pentadbiran (<span data-t="pct">' + esc(String(k.pct)) + "</span>%)", "untung", k.untung) +
@@ -1840,6 +1841,47 @@
       '</div><div style="margin-top:20px"><button type="submit" class="btn primary">Simpan Tetapan</button></div></form></section>';
   }
 
+  /* ========== Tarikh hh/bb/tttt (tidak bergantung pada bahasa Windows) ========== */
+  const isoKeHbt = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || "")); return m ? m[3] + "/" + m[2] + "/" + m[1] : ""; };
+  function hbtKeIso(s) {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s || "").trim());
+    if (!m) return "";
+    const h = +m[1], b = +m[2], t = +m[3], d = new Date(Date.UTC(t, b - 1, h));
+    if (d.getUTCFullYear() !== t || d.getUTCMonth() !== b - 1 || d.getUTCDate() !== h) return "";
+    return t + "-" + String(b).padStart(2, "0") + "-" + String(h).padStart(2, "0");
+  }
+  const nilaiTarikh = (el) => (el && el.hasAttribute("data-tarikh") ? hbtKeIso(el.value) : el ? el.value : "");
+  /** Kotak tarikh: teks hh/bb/tttt + pemilih kalendar tersembunyi. `attrs` mengandungi name / data-q. */
+  const tarikhHtml = (attrs, iso, dis) => '<span class="tarikh-wrap"><input type="text" ' + attrs + ' data-tarikh inputmode="numeric" placeholder="hh/bb/tttt" maxlength="10" autocomplete="off" value="' + esc(isoKeHbt(iso)) + '"' + (dis || "") + '>' +
+    '<input type="date" class="tarikh-pick" tabindex="-1" aria-hidden="true" value="' + esc(iso || "") + '"' + (dis || "") + '><button type="button" class="tarikh-btn" data-tarikh-btn aria-label="Pilih tarikh dari kalendar"' + (dis || "") + ">📅</button></span>";
+  // Taip "21112026" → "21/11/2026" secara automatik
+  document.addEventListener("input", (ev) => {
+    const el = ev.target;
+    if (!el.matches || !el.matches("[data-tarikh]") || ev.inputType === "deleteContentBackward") return;
+    const d = el.value.replace(/\D/g, "").slice(0, 8);
+    const f = d.length > 4 ? d.slice(0, 2) + "/" + d.slice(2, 4) + "/" + d.slice(4) : d.length > 2 ? d.slice(0, 2) + "/" + d.slice(2) : d;
+    if (f !== el.value) el.value = f;
+  }, true);
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest && ev.target.closest("[data-tarikh-btn]"); if (!b) return;
+    const p = b.parentNode.querySelector(".tarikh-pick"), t = b.parentNode.querySelector("[data-tarikh]");
+    if (!p) return;
+    p.value = hbtKeIso(t.value) || "";
+    try { p.showPicker(); } catch (e) { p.focus(); p.click(); }
+  });
+  document.addEventListener("change", (ev) => {
+    if (!ev.target.matches || !ev.target.matches(".tarikh-pick")) return;
+    const t = ev.target.parentNode.querySelector("[data-tarikh]");
+    if (t && ev.target.value) { t.value = isoKeHbt(ev.target.value); t.dispatchEvent(new Event("input", { bubbles: true })); t.dispatchEvent(new Event("change", { bubbles: true })); }
+  });
+  /** "AMIRAH AININ BINTI AMRAN" → "Amirah Ainin binti Amran"; "DR. AMIR" → "Dr. Amir". */
+  function namaPapar(nama) {
+    const s = String(nama || "").trim();
+    if (!s || s.indexOf("@") >= 0) return s;
+    const kecil = ["bin", "binti", "bt", "bte", "a/l", "a/p", "van", "de", "dan"];
+    return s.toLowerCase().split(/\s+/).map((w) => (kecil.indexOf(w) >= 0 ? w : w.replace(/(^|[-'(./])([a-z])/g, (m, a, b) => a + b.toUpperCase()))).join(" ");
+  }
+
   /* ========== Router ========== */
   /* Core Scope v1.0 (P1-4): enam modul utama + Tetapan berasingan.
    * Laluan lama (workspace, programs, dbkl, analytics, notifications) dikekalkan tetapi tidak dipaparkan dalam sidebar.
@@ -1929,6 +1971,7 @@
       if (fd.type === "confirm") return '<div class="field full"><label class="check-row" for="' + id + '"><input id="' + id + '" name="' + fd.name + '" type="checkbox"' + req + "> " + esc(fd.label) + (fd.required ? ' <span class="req">*</span>' : "") + '</label><span class="field-err" hidden></span></div>';
       if (fd.type === "select" || fd.type === "multiselect") ctl = '<select id="' + attrs + (fd.type === "multiselect" ? " multiple" : "") + ">" + (fd.options || []).map((o) => { const [v, l] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(v) + '"' + (String(fd.value) === String(v) ? " selected" : "") + ">" + esc(l) + "</option>"; }).join("") + "</select>";
       else if (fd.type === "textarea") ctl = '<textarea id="' + attrs + ">" + esc(fd.value || "") + "</textarea>";
+      else if (fd.type === "date") ctl = tarikhHtml('id="' + attrs, fd.value || "", "");
       else ctl = '<input id="' + attrs + ' type="' + (fd.type || "text") + '"' + (fd.type === "file" ? "" : ' value="' + esc(fd.value == null ? "" : fd.value) + '"') + ">";
       return '<div class="field' + full + '"><label for="' + id + '">' + esc(fd.label) + (fd.required ? ' <span class="req">*</span>' : "") + "</label>" + ctl + (fd.help ? '<span class="field-help">' + esc(fd.help) + "</span>" : "") + '<span class="field-err" hidden></span></div>';
     }).join("");
@@ -1939,6 +1982,9 @@
       if (!validate(form)) return;
       const data = {}, fd = new FormData(form);
       fd.forEach((v, k) => { data[k] = typeof v === "string" ? v.trim() : v; });
+      let tarikhRosak = "";
+      form.querySelectorAll("input[data-tarikh][name]").forEach((el) => { if (el.value.trim() && !hbtKeIso(el.value)) tarikhRosak = el.value; data[el.name] = hbtKeIso(el.value); });
+      if (tarikhRosak) { toast("Tarikh \"" + tarikhRosak + "\" tidak sah. Guna format hh/bb/tttt."); return; }
       cfg.fields.filter((x) => x.type === "multiselect").forEach((x) => { data[x.name] = fd.getAll(x.name); });
       closeModal();
       cfg.onSubmit(data);
