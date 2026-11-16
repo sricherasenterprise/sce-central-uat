@@ -872,11 +872,13 @@
     try { o = await LIVE.api("tasks.get", { task_id: id }); } catch (e) { openInfo({ title: id, body: note(e.message) }); return; }
     const t = o.task;
     const acts = t.tindakan.map((a) => btn(LT_TINDAKAN[a] || a, "lt-act", a === "approve" || a === "accept" || a === "submit" ? "primary" : "", ' data-id="' + esc(t.task_id) + '" data-t="' + esc(a) + '"')).join("");
-    const sej = o.sejarah.slice().reverse().map((h) => ({ text: (LT_AKSI_SEJARAH[h.action] || h.action) + (h.to_value ? ": " + LT_STATUS(h.from_value) + (h.from_value ? " → " : "") + LT_STATUS(h.to_value) : "") + (h.note ? " · " + h.note : ""), meta: h.nama + " · " + fmtDateTime(h.at) }));
+    const pjNama = (ref) => { if (!ref) return "—"; const x = pjCari(ref); return x ? x.nama : ref; };
+    const sej = o.sejarah.slice().reverse().map((h) => h.action === "PROJEK" ? { text: "Projek: " + pjNama(h.from_value) + " → " + (h.to_value ? pjNama(h.to_value) : "dibuang"), meta: h.nama + " · " + fmtDateTime(h.at) } : ({ text: (LT_AKSI_SEJARAH[h.action] || h.action) + (h.to_value ? ": " + LT_STATUS(h.from_value) + (h.from_value ? " → " : "") + LT_STATUS(h.to_value) : "") + (h.note ? " · " + h.note : ""), meta: h.nama + " · " + fmtDateTime(h.at) }));
     openInfo({ title: t.task_id + " · " + t.title, actions: acts, body: detailList([
       ["Status", ltBadge(t)], ["Kemajuan", progress(Number(t.progress) || 0)], ["Assignee utama", esc(t.nama.primary)], ["Ahli tambahan", esc(t.team || "—")],
       ["Pemberi tugas", esc(t.nama.assigned_by)], ["Penyemak", esc(t.nama.reviewer)], ["Tarikh akhir", t.due_date ? dueText(t.due_date, ["COMPLETED", "CANCELLED"].includes(t.status)) : "—"],
-      ["Projek", t.project_id ? (() => { const x = pjCari(t.project_id); return '<button type="button" class="text-link" data-action="pj-buka" data-ref="' + esc(t.project_id) + '">' + esc(x ? x.nama : t.project_id) + "</button>"; })() : "—"],
+      ["Projek", (t.project_id ? (() => { const x = pjCari(t.project_id); return '<button type="button" class="text-link" data-action="pj-buka" data-ref="' + esc(t.project_id) + '">' + esc(x ? x.nama : t.project_id) + "</button>"; })() : "—") +
+        (["SUPER_ADMIN", "MANAGEMENT"].includes(LIVE_USER.role) || t.assigned_by === LIVE_USER.emel ? " " + btn(t.project_id ? "Tukar" : "Pautkan ke projek", "lt-projek", "small", ' data-id="' + esc(t.task_id) + '"') : "")],
       ["Kategori", esc(t.category || "—")], ["Keterangan", esc(t.description || "—")], ["Sebab tolak", esc(t.reject_reason || "—")]
     ]) + '<p class="sub-head" style="margin-top:16px">Lampiran / Bukti</p><div id="lampiran-tugasan" data-task="' + esc(t.task_id) + '"><p class="small muted" role="status">Memuatkan lampiran…</p></div>' +
       '<p class="sub-head" style="margin-top:16px">Sejarah</p>' + timeline(sej, "Tiada sejarah.") });
@@ -1252,9 +1254,14 @@
     const meta = {}; (PJ.meta || []).forEach((m) => { meta[m.project_id] = m; });
     const guna = {}, out = [];
     const unik = (base) => { let r = base.slice(0, 60).replace(/-+$/, ""), n = 2; while (guna[r]) r = base.slice(0, 56).replace(/-+$/, "") + "-" + n++; guna[r] = 1; return r; };
+    // Rujukan program: No. Fail sah (ada digit, tiada "*" pemegang tempat); jika tiada → nama tetuan.
+    // No. Fail yang sama digunakan oleh lebih satu program (jenis sama) → tambah tarikh program supaya unik dan stabil.
+    const noFailSah = (v) => (v && !/\*/.test(v) && /\d/.test(v) ? v : "");
+    const asasPrg = (p) => "PRG-" + (PJ_KOD[p.jenis] || "P") + "-" + (noFailSah(p.noFail) ? pjSlug(p.noFail) : pjSlug(p.tetuan).replace(/^TETUAN-/, "").slice(0, 40));
+    const kiraAsas = {}; (LD.program || []).forEach((p) => { const a = asasPrg(p); kiraAsas[a] = (kiraAsas[a] || 0) + 1; });
     (LD.program || []).forEach((p) => {
-      const kod = PJ_KOD[p.jenis] || "P";
-      const ref = unik("PRG-" + kod + "-" + (p.noFail ? pjSlug(p.noFail) : pjSlug(p.tetuan).replace(/^TETUAN-/, "").slice(0, 40)));
+      const asas = asasPrg(p);
+      const ref = unik(kiraAsas[asas] > 1 && p.tarikh ? asas.slice(0, 50) + "-" + String(p.tarikh).replace(/-/g, "") : asas);
       const tahap = [p.tahap.event, p.tahap.report, p.tahap.submission];
       const st = { Selesai: "SELESAI", Batal: "BATAL", Ditangguh: "DITANGGUH", "Akan datang": "BARU", "Tarikh belum tetap": "BARU" }[p.kategori] || "BERJALAN";
       out.push({ ref, sumber: "AUTO", asal: "program", src: p, jenis: PJ_JENIS[p.jenis] ? p.jenis : "LAIN-LAIN", nama: p.tetuan, rujukan: p.noFail, lokasi: p.lokasi, tarikh: pjTarikhIso(p.tarikh), statusSheet: st, nota: p.kategori,
@@ -1285,8 +1292,15 @@
   /** Isi datalist pilihan projek (untuk borang tugasan / dokumen). */
   function pjDatalist(form, input, id) {
     const dl = document.createElement("datalist"); dl.id = id;
-    pjSemua().filter((p) => p.status !== "BATAL").sort((a, b) => (b.tarikh || "").localeCompare(a.tarikh || "")).forEach((p) => { const o = document.createElement("option"); o.value = pjLabel(p); dl.appendChild(o); });
+    const isi = () => { dl.textContent = ""; pjSemua().filter((p) => p.status !== "BATAL").sort((a, b) => (b.tarikh || "").localeCompare(a.tarikh || "")).forEach((p) => { const o = document.createElement("option"); o.value = pjLabel(p); dl.appendChild(o); }); };
+    isi();
     form.appendChild(dl); input.setAttribute("list", id); input.setAttribute("autocomplete", "off");
+    // Data Program / Order / projek manual belum sampai: isi semula bila tiba (maks ~20 s)
+    if (!LD.program || !LD.order || PJ.meta === null) {
+      if (!LD.program) liveLoad("program"); if (!LD.order) liveLoad("order"); if (PJ.meta === null) pjLoad();
+      let n = 0; const ulang = () => { if (!dl.isConnected) return; if (LD.program && LD.order && PJ.meta !== null) { isi(); return; } if (++n < 40) setTimeout(ulang, 500); };
+      setTimeout(ulang, 500);
+    }
   }
 
   function viewProjectsLive() {
@@ -1350,6 +1364,24 @@
     modal.classList.add("modal-slip"); setTimeout(() => modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true }), 0);
     // Tugasan / dokumen belum sampai: papar semula projek yang sama bila data tiba
     if (tunggu) { const tajuk = p.nama; setTimeout(() => { const h = modal.querySelector("#modal-title"); if (modal.open && h && h.textContent === tajuk && modal.querySelector(".pj-sub")) pjBuka(ref); }, 900); }
+  }
+
+  /** Paut / tukar / buang projek untuk tugasan sedia ada (tasks.setProject). */
+  function pjPautTugasan(id) {
+    const t = state.ltTask && state.ltTask.task_id === id ? state.ltTask : null; if (!t) return;
+    if (!LD.program) liveLoad("program"); if (!LD.order) liveLoad("order");
+    const kini = t.project_id ? pjCari(t.project_id) : null;
+    openForm({ live: true, title: (t.project_id ? "Tukar projek: " : "Pautkan ke projek: ") + t.task_id, submit: "Simpan", fields: [
+      { name: "projek", label: "Projek", full: true, maxlength: 250, value: kini ? pjLabel(kini) : "", help: "Taip nama tetuan, no. fail atau ID order dan pilih dari senarai. Kosongkan untuk membuang pautan." }
+    ], intro: note("Tugasan: " + t.title + ". Perubahan direkod dalam sejarah tugasan."),
+      onSubmit: async (v) => {
+        const teks = String(v.projek || "").trim(), ref = teks ? pjRefDariTeks(teks) : "";
+        if (teks && !ref) { toast("Projek tidak dikenali. Pilih dari senarai."); return; }
+        try { await LIVE.api("tasks.setProject", { task_id: t.task_id, project_id: ref, version: t.version }); toast(ref ? "Tugasan dipautkan ke projek." : "Pautan projek dibuang."); }
+        catch (e) { toast(e.message); }
+        LD.tasks = null; liveLoad("tasks"); liveTaskOpen(t.task_id);
+      } });
+    const fm = modal.querySelector("form"); pjDatalist(fm, fm.querySelector("[name=projek]"), "lt-paut-senarai");
   }
 
   function pjBorang(ref) {
@@ -2530,6 +2562,7 @@
     async "lt-read-all"() { try { await LIVE.api("notifications.read"); } catch (e) { toast(e.message); } LD.notif = null; liveLoad("notif"); },
     "lt-notif"(el) { closePops(); const id = el.dataset.id; ltTandaDibaca({ notif_id: el.dataset.notif || "" }); if (currentRoute() !== "tasks") location.hash = "#tasks"; setTimeout(() => liveTaskOpen(id), 200); },
     "lt-open"(el) { liveTaskOpen(el.dataset.id); },
+    "lt-projek"(el) { pjPautTugasan(el.dataset.id); },
     "lt-act"(el) { liveTaskAction(el.dataset.id, el.dataset.t); },
 
     "open-project"(el, ev) { ev.preventDefault(); openProject(el.dataset.id); },
