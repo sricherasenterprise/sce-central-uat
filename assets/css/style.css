@@ -617,3 +617,19 @@ button.pop-link { width: 100%; text-align: left; background: none; border: 0; fo
 .dk-info dd { margin: 0; overflow-wrap: anywhere; }
 .dk-pdf { background: linear-gradient(135deg, #B3261E, #E8613C); }
 .dk-quotation { background: linear-gradient(135deg, #0E6E66, #33C2B8); }
+
+/* Projects (16/11/2026) */
+.stat-btn { font: inherit; text-align: left; background: transparent; color: inherit; cursor: pointer; border-top: 0; border-right: 0; border-bottom: 0; }
+.stat-btn:hover dt { color: var(--text); text-decoration: underline; }
+.stat-btn:focus-visible { outline: 3px solid var(--accent, #33C2B8); }
+.pj-cari .search { flex: 1 1 320px; }
+.pj-cari .search input { font-size: 15px; padding: 10px 12px; }
+.pj-nama { font-weight: 600; text-align: left; }
+.chips-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 6px; }
+.pj-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pj-langkah { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.pj-langkah li { display: flex; align-items: center; gap: 8px; }
+.pj-tanda { display: inline-grid; place-items: center; min-width: 26px; height: 22px; padding: 0 4px; border-radius: 6px; border: 1px solid var(--border); font-size: 11px; font-weight: 700; }
+.pj-langkah li.siap .pj-tanda { background: #1E8E5A; border-color: #1E8E5A; color: #fff; }
+.pj-langkah li.na { color: var(--muted, #667); }
+.pj-langkah li.na .pj-tanda { background: var(--surface-sunk); }

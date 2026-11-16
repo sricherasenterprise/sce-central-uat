@@ -57,7 +57,7 @@
     },
     STAFF: {
       scope: "self", dashboard: "staff", taskApprove: "none", audit: "none",
-      routes: ["dashboard", "workspace", "tasks", "programs", "dbkl", "notifications"],
+      routes: ["dashboard", "workspace", "projects", "tasks", "programs", "dbkl", "documents", "notifications"],
       caps: ["task.respond", "dbkl.work", "notifications.receive"]
     },
     VIEWER: { scope: "summary", dashboard: "viewer", taskApprove: "none", audit: "none", routes: ["dashboard"], caps: [] }
@@ -755,6 +755,7 @@
 
   /* ========== Paparan: Project Management ========== */
   function viewProjects() {
+    if (LIVE_USER) return viewProjectsLive();
     const st = f("projects.status"), q = f("projects.q").toLowerCase(), all = DAL.projects();
     const rows = all.filter((p) => (st === "Semua" ? p.status !== "ARCHIVED" : p.status === st) && (!q || (p.name + p.id + p.pm + p.client).toLowerCase().includes(q)));
     const pending = can("project.approve") ? all.filter((p) => p.approval === "PENDING") : [];
@@ -839,11 +840,14 @@
         { h: "Kemajuan", r: (t) => progress(Number(t.progress) || 0, t.status === "COMPLETED" ? "good" : "") }
       ], list, empty(all.length ? "Tiada tugasan sepadan dengan penapis ini." : "Belum ada tugasan. " + (d.bolehCipta ? "Klik + Tugasan Baharu untuk mula." : ""))) + "</section>";
   }
-  function liveTaskNew() {
+  function liveTaskNew(refProjek) {
+    if (!LD.program) liveLoad("program"); if (!LD.order) liveLoad("order");
+    const pj = refProjek ? pjCari(refProjek) : null;
     const p = (LD.tasks && LD.tasks.pengguna) || [];
     const opt = p.map((u) => [u.emel, u.nama + " (" + LIVE.roleLabel(u.role) + ")"]);
     openForm({ live: true, title: "Tugasan Baharu", submit: "Cipta Tugasan", intro: note("Penyemak tidak boleh menjadi assignee. Assignee utama perlu menerima tugasan sebelum mula."), fields: [
-      { name: "category", label: "Kategori tugasan", type: "select", required: true, full: true, options: [["", "Pilih kategori…"], "Signboard Kaedah 3A", "Signboard Kaedah 3B", "Communication Strategy", "Sesi Libat Urus (SLU)", "Lain-lain"] },
+      { name: "projek", label: "Projek (pilihan)", full: true, maxlength: 250, value: pj ? pjLabel(pj) : "", help: "Taip nama tetuan, no. fail atau ID order, kemudian pilih dari senarai." },
+      { name: "category", label: "Kategori tugasan", type: "select", required: true, full: true, value: pj ? PJ_KAT_TUGASAN[pj.jenis] || "Lain-lain" : "", options: [["", "Pilih kategori…"], "Signboard Kaedah 3A", "Signboard Kaedah 3B", "Communication Strategy", "Sesi Libat Urus (SLU)", "Lain-lain"] },
       { name: "title", label: "Tajuk", required: true, maxlength: 200, full: true },
       { name: "description", label: "Keterangan", type: "textarea", full: true, maxlength: 2000 },
       { name: "primary_assignee", label: "Assignee utama", type: "select", options: opt, required: true },
@@ -852,7 +856,15 @@
       { name: "priority", label: "Keutamaan", type: "select", options: [["MEDIUM", "Sederhana"], ["HIGH", "Tinggi"], ["LOW", "Rendah"]], value: "MEDIUM" },
       { name: "start_date", label: "Tarikh mula", type: "date" },
       { name: "due_date", label: "Tarikh akhir", type: "date", required: true }
-    ], onSubmit: (dt) => { dt.team = (dt.team || []).join(","); ltCall("tasks.create", { data: dt }, "Tugasan dicipta."); } });
+    ], onSubmit: (dt) => {
+      const teks = String(dt.projek || "").trim(); delete dt.projek;
+      dt.project_id = teks ? pjRefDariTeks(teks) : "";
+      if (teks && !dt.project_id) { toast("Projek tidak dikenali. Pilih projek dari senarai, atau kosongkan medan Projek."); return; }
+      dt.team = (dt.team || []).join(","); ltCall("tasks.create", { data: dt }, "Tugasan dicipta.");
+    } });
+    const fm = modal.querySelector("form"), pjEl = fm.querySelector("[name=projek]"), katEl = fm.querySelector("[name=category]");
+    pjDatalist(fm, pjEl, "lt-projek-senarai");
+    pjEl.addEventListener("change", () => { const x = pjCari(pjRefDariTeks(pjEl.value)); if (x && PJ_KAT_TUGASAN[x.jenis]) katEl.value = PJ_KAT_TUGASAN[x.jenis]; });
   }
   async function liveTaskOpen(id) {
     openInfo({ title: id, body: '<p class="muted" role="status">Memuatkan butiran…</p>' });
@@ -864,6 +876,7 @@
     openInfo({ title: t.task_id + " · " + t.title, actions: acts, body: detailList([
       ["Status", ltBadge(t)], ["Kemajuan", progress(Number(t.progress) || 0)], ["Assignee utama", esc(t.nama.primary)], ["Ahli tambahan", esc(t.team || "—")],
       ["Pemberi tugas", esc(t.nama.assigned_by)], ["Penyemak", esc(t.nama.reviewer)], ["Tarikh akhir", t.due_date ? dueText(t.due_date, ["COMPLETED", "CANCELLED"].includes(t.status)) : "—"],
+      ["Projek", t.project_id ? (() => { const x = pjCari(t.project_id); return '<button type="button" class="text-link" data-action="pj-buka" data-ref="' + esc(t.project_id) + '">' + esc(x ? x.nama : t.project_id) + "</button>"; })() : "—"],
       ["Kategori", esc(t.category || "—")], ["Keterangan", esc(t.description || "—")], ["Sebab tolak", esc(t.reject_reason || "—")]
     ]) + '<p class="sub-head" style="margin-top:16px">Lampiran / Bukti</p><div id="lampiran-tugasan" data-task="' + esc(t.task_id) + '"><p class="small muted" role="status">Memuatkan lampiran…</p></div>' +
       '<p class="sub-head" style="margin-top:16px">Sejarah</p>' + timeline(sej, "Tiada sejarah.") });
@@ -1015,7 +1028,7 @@
     LIVE.api(SUMBER[kind][0])
       .then((o) => { LD[kind] = SUMBER[kind][1] ? o[SUMBER[kind][1]] : o; LD.at[kind] = o.dikemasKini; LD.err[kind] = null; })
       .catch((e) => { LD.err[kind] = e.code === "TIADA_KEBENARAN" ? "Akaun anda tiada kebenaran untuk data ini." : (e.message || "Ralat memuatkan data."); })
-      .finally(() => { LD.busy[kind] = false; if (kind === "notif") renderNotifs(); else if (["programs", "dbkl", "operations", "dashboard", "tasks", "payroll", "quotation"].includes(currentRoute())) refresh(); });
+      .finally(() => { LD.busy[kind] = false; if (kind === "notif") renderNotifs(); else if (["programs", "dbkl", "operations", "dashboard", "tasks", "payroll", "quotation", "projects"].includes(currentRoute())) refresh(); });
   }
   const liveTag = '<span class="live-tag">Data sebenar · baca sahaja</span>';
   const liveTagDev = '<span class="live-tag">Data sebenar DEV</span>'; // Tasks dan notifikasi: boleh ditulis, dalam SCE-DEV-TASKS
@@ -1210,6 +1223,169 @@
       '<div class="grid" style="margin-top:16px"><section class="panel c12">' + panelHead(tab) + '<div class="toolbar">' + chips("dbkl.tab", tabs) + "</div>" + body + "</section></div>";
   }
 
+  /* ========== Projects (automatik daripada Program + Order Signboard) ========== */
+  /* Keputusan pemilik 16/11/2026: projek dicipta automatik. Rujukan stabil: PRG-<kod>-<No. Fail> / ORD-<ID Order> / PRJ-YYYY-NNNN (manual).
+   * Maklumat tambahan (PM, sasaran, catatan, status ganti) + projek manual: projects.meta / projects.save (tab PROJEK). */
+  const PJ = { meta: null, bolehUrus: false, pm: [], tiada: false, err: null, busy: false };
+  const PJ_JENIS = { COMSTRA: "Comm. Strategy", SLU: "SLU", "SLU PARLIMEN": "SLU Parlimen", "SIGNBOARD 3A": "Signboard 3A", "SIGNBOARD 3B": "Signboard 3B", SIGNBOARD: "Signboard", "LAIN-LAIN": "Lain-lain" };
+  const PJ_STATUS = { BARU: ["Baharu", "info"], BERJALAN: ["Berjalan", "warn"], MENUNGGU: ["Menunggu", "neutral"], SELESAI: ["Selesai", "good"], DITANGGUH: ["Ditangguh", "neutral"], BATAL: ["Batal", "bad"] };
+  const PJ_KOD = { COMSTRA: "CS", SLU: "SLU", "SLU PARLIMEN": "SLUP" };
+  const PJ_KAT_TUGASAN = { COMSTRA: "Communication Strategy", SLU: "Sesi Libat Urus (SLU)", "SLU PARLIMEN": "Sesi Libat Urus (SLU)", "SIGNBOARD 3A": "Signboard Kaedah 3A", "SIGNBOARD 3B": "Signboard Kaedah 3B", "LAIN-LAIN": "Lain-lain" };
+  const pjSlug = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const pjTarikhIso = (s) => { const t = String(s || "").trim(); return /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : hbtKeIso(t) || ""; };
+  const pjBadge = (st) => { const x = PJ_STATUS[st] || [st || "—", "neutral"]; return '<span class="badge ' + x[1] + '">' + esc(x[0]) + "</span>"; };
+  const pjLabel = (p) => p.nama + (p.rujukan ? " · " + p.rujukan : "") + " [" + p.ref + "]";
+  const pjRefDariTeks = (t) => { const m = /\[((?:PRG|ORD|PRJ)-[A-Z0-9-]+)\]\s*$/.exec(String(t || "").trim()); return m ? m[1] : ""; };
+
+  function pjLoad() {
+    if (PJ.busy || !LIVE_USER) return;
+    PJ.busy = true;
+    LIVE.api("projects.meta")
+      .then((o) => { PJ.meta = o.meta || []; PJ.bolehUrus = !!o.bolehUrus; PJ.pm = o.pm || []; PJ.tiada = false; PJ.err = null; })
+      .catch((e) => { PJ.meta = []; if (e.code === "TINDAKAN_TAK_SAH") PJ.tiada = true; else PJ.err = e.message; })
+      .finally(() => { PJ.busy = false; if (currentRoute() === "projects") refresh(); });
+  }
+  function pjReload() { PJ.meta = null; pjLoad(); }
+
+  /** Bina senarai projek: automatik (Program + Order) + manual, digabung dengan maklumat tambahan, tugasan dan dokumen. */
+  function pjSemua() {
+    const meta = {}; (PJ.meta || []).forEach((m) => { meta[m.project_id] = m; });
+    const guna = {}, out = [];
+    const unik = (base) => { let r = base.slice(0, 60).replace(/-+$/, ""), n = 2; while (guna[r]) r = base.slice(0, 56).replace(/-+$/, "") + "-" + n++; guna[r] = 1; return r; };
+    (LD.program || []).forEach((p) => {
+      const kod = PJ_KOD[p.jenis] || "P";
+      const ref = unik("PRG-" + kod + "-" + (p.noFail ? pjSlug(p.noFail) : pjSlug(p.tetuan).replace(/^TETUAN-/, "").slice(0, 40)));
+      const tahap = [p.tahap.event, p.tahap.report, p.tahap.submission];
+      const st = { Selesai: "SELESAI", Batal: "BATAL", Ditangguh: "DITANGGUH", "Akan datang": "BARU", "Tarikh belum tetap": "BARU" }[p.kategori] || "BERJALAN";
+      out.push({ ref, sumber: "AUTO", asal: "program", src: p, jenis: PJ_JENIS[p.jenis] ? p.jenis : "LAIN-LAIN", nama: p.tetuan, rujukan: p.noFail, lokasi: p.lokasi, tarikh: pjTarikhIso(p.tarikh), statusSheet: st, nota: p.kategori,
+        kemajuan: st === "SELESAI" ? 100 : pct(tahap.filter((x) => x === "siap").length, 3), pmAsal: "" });
+    });
+    (LD.order || []).forEach((o) => {
+      const ref = unik("ORD-" + pjSlug(o.id));
+      const st = o.perlu && o.siap >= o.perlu ? "SELESAI" : o.siap ? "BERJALAN" : "BARU";
+      out.push({ ref, sumber: "AUTO", asal: "order", src: o, jenis: o.kaedah === "3A" || o.kaedah === "3B" ? "SIGNBOARD " + o.kaedah : "SIGNBOARD", nama: o.tetuan || o.id, rujukan: o.id + (o.rujukanJprb ? " · JPRB " + o.rujukanJprb : ""), lokasi: o.lokasi, tarikh: pjTarikhIso(o.tarikhOrder), statusSheet: st,
+        nota: st === "SELESAI" ? "10 langkah selesai" : "Seterusnya: " + o.seterusnya, kemajuan: pct(o.siap, o.perlu), pmAsal: o.staf || "" });
+    });
+    (PJ.meta || []).filter((m) => m.sumber === "MANUAL").forEach((m) => {
+      out.push({ ref: m.project_id, sumber: "MANUAL", asal: "manual", src: m, jenis: m.jenis || "LAIN-LAIN", nama: m.nama, pelanggan: m.pelanggan, rujukan: m.rujukan, lokasi: m.lokasi, tarikh: m.tarikh_mula || String(m.created_at || "").slice(0, 10), statusSheet: m.status || "BARU", nota: "Projek manual", kemajuan: null, pmAsal: "" });
+    });
+    const tugasan = (LD.tasks && LD.tasks.tasks) || [], dok = DK.list || [];
+    out.forEach((p) => {
+      const m = meta[p.ref] || {};
+      p.status = (p.sumber === "AUTO" && m.status) || p.statusSheet;
+      p.pm = m.pm_nama || p.pmAsal; p.pmEmel = m.pm || ""; p.sasaran = m.tarikh_sasaran || ""; p.catatan = m.catatan || "";
+      p.tugasan = tugasan.filter((t) => t.project_id === p.ref);
+      p.dokumen = dok.filter((d) => d.rujukan_jenis === "PROJEK" && d.rujukan === p.ref);
+      if (p.kemajuan === null) { const aktif = p.tugasan.filter((t) => t.status !== "CANCELLED"); p.kemajuan = p.status === "SELESAI" ? 100 : pct(aktif.filter((t) => t.status === "COMPLETED").length, aktif.length); }
+      p.cari = [p.nama, p.pelanggan, p.rujukan, p.lokasi, p.ref, p.pm, PJ_JENIS[p.jenis], p.nota].join(" ").toLowerCase();
+    });
+    return out;
+  }
+  const pjCari = (ref) => pjSemua().find((p) => p.ref === ref);
+  /** Isi datalist pilihan projek (untuk borang tugasan / dokumen). */
+  function pjDatalist(form, input, id) {
+    const dl = document.createElement("datalist"); dl.id = id;
+    pjSemua().filter((p) => p.status !== "BATAL").sort((a, b) => (b.tarikh || "").localeCompare(a.tarikh || "")).forEach((p) => { const o = document.createElement("option"); o.value = pjLabel(p); dl.appendChild(o); });
+    form.appendChild(dl); input.setAttribute("list", id); input.setAttribute("autocomplete", "off");
+  }
+
+  function viewProjectsLive() {
+    const head = (x) => pageHead("Projects", "Semua projek SCE di satu tempat: dicipta automatik daripada rekod Program dan Order Signboard, lengkap dengan tugasan dan dokumen. " + liveStamp("program"), (x || "") + " " + liveTag);
+    const gate = liveGate("program") || liveGate("order");
+    if (gate) return head() + gate;
+    if (!LD.tasks && !LD.err.tasks && LIVE_USER.role !== "VIEWER") liveLoad("tasks");
+    if (!DK.list && !DK.err) dkLoad();
+    if (PJ.meta === null) pjLoad();
+    ["pj.status:Aktif", "pj.jenis:Semua", "pj.susun:baru"].forEach((x) => { const [k, v] = x.split(":"); if (!f(k)) state.filters[k] = v; });
+    const semua = pjSemua(), st = f("pj.status"), jn = f("pj.jenis"), kata = f("pj.q").toLowerCase().split(/\s+/).filter(Boolean);
+    const aktif = (p) => !["SELESAI", "BATAL"].includes(p.status);
+    let list = semua.filter((p) => (st === "Semua" || (st === "Aktif" ? aktif(p) : p.status === "SELESAI")) && (jn === "Semua" || PJ_JENIS[p.jenis] === jn || (jn === "Signboard" && p.jenis.indexOf("SIGNBOARD") === 0)) && kata.every((w) => p.cari.includes(w)));
+    const susun = f("pj.susun");
+    list.sort(susun === "nama" ? (a, b) => a.nama.localeCompare(b.nama) : susun === "sasaran" ? (a, b) => (a.sasaran || "9999").localeCompare(b.sasaran || "9999") : (a, b) => (b.tarikh || "").localeCompare(a.tarikh || ""));
+    const stat = (label, val, sub, tapis) => '<button type="button" class="stat stat-btn" data-action="pj-tapis" data-tapis="' + tapis + '"><dt>' + esc(label) + "</dt><dd>" + val + '</dd><span class="small muted">' + esc(sub) + "</span></button>";
+    const sb = semua.filter((p) => p.asal === "order" && aktif(p)).length, prg = semua.filter((p) => p.asal === "program" && aktif(p)).length;
+    const tambah = PJ.bolehUrus && !PJ.tiada ? btn("+ Projek Baharu", "pj-baru", "primary") : "";
+    return head(tambah) +
+      (PJ.tiada ? note("PM, tarikh sasaran dan projek manual akan aktif selepas backend dikemas kini. Senarai projek di bawah sudah menggunakan rekod sebenar.") : "") +
+      (PJ.err ? note("Maklumat tambahan projek tidak dapat dimuatkan: " + PJ.err) : "") +
+      '<section class="panel"><dl class="stats">' + stat("Projek aktif", semua.filter(aktif).length, "daripada " + semua.length + " projek", "Aktif") + stat("Signboard dalam proses", sb, "Order Kaedah 3A / 3B", "Signboard") + stat("Program aktif", prg, "Comstra / SLU", "Program") + stat("Selesai", semua.filter((p) => p.status === "SELESAI").length, "projek ditutup", "Selesai") + "</dl></section>" +
+      '<section class="panel" style="margin-top:16px">' + panelHead("Senarai Projek", list.length + " projek", "", liveTag) +
+      '<div class="toolbar pj-cari">' + searchBox("pj.q", "Cari tetuan, no. fail, ID order, lokasi, PM…") + filterSelect("pj.susun", "Susun", [["baru", "Terbaru"], ["sasaran", "Tarikh sasaran"], ["nama", "Nama A–Z"]]) + "</div>" +
+      '<div class="toolbar">' + chips("pj.status", ["Aktif", "Selesai", "Semua"]) + '<span class="chips-sep" aria-hidden="true"></span>' + chips("pj.jenis", ["Semua", "Comm. Strategy", "SLU", "SLU Parlimen", "Signboard", "Lain-lain"]) + "</div>" +
+      table([
+        { h: "Projek", r: (p) => '<button type="button" class="text-link pj-nama" data-action="pj-buka" data-ref="' + esc(p.ref) + '">' + esc(p.nama) + '</button><br><span class="small muted">' + esc(p.rujukan || (p.asal === "program" ? "Tiada No. Fail" : p.ref)) + "</span>" },
+        { h: "Jenis", r: (p) => '<span class="badge neutral">' + esc(PJ_JENIS[p.jenis] || p.jenis) + "</span>" },
+        { h: "Tarikh", r: (p) => '<span class="tnum">' + esc(isoKeHbt(p.tarikh) || "—") + "</span>" },
+        { h: "PM", r: (p) => esc(p.pm ? namaPapar(p.pm) : "—") },
+        { h: "Kemajuan", r: (p) => progress(p.kemajuan || 0, p.status === "SELESAI" ? "good" : "") },
+        { h: "Tugasan", num: true, r: (p) => (p.tugasan.length ? '<span class="tnum">' + p.tugasan.filter((t) => t.status === "COMPLETED").length + "/" + p.tugasan.length + "</span>" : '<span class="muted">—</span>') },
+        { h: "Dokumen", num: true, r: (p) => (p.dokumen.length ? '<span class="tnum">' + p.dokumen.length + "</span>" : '<span class="muted">—</span>') },
+        { h: "Status", r: (p) => pjBadge(p.status) + '<br><span class="small muted">' + esc(p.nota || "") + "</span>" }
+      ], list, empty(kata.length ? "Tiada projek sepadan dengan carian \"" + f("pj.q") + "\"." : "Tiada projek dalam penapis ini.")) + "</section>";
+  }
+
+  function pjBuka(ref) {
+    const p = pjCari(ref);
+    if (!p) { toast("Projek tidak dijumpai. Rekod mungkin belum dimuatkan."); return; }
+    const s = p.src, bolehTugas = LD.tasks && LD.tasks.bolehCipta;
+    const tunggu = (!LD.tasks && !LD.err.tasks && LIVE_USER.role !== "VIEWER") || (!DK.list && !DK.err);
+    if (!LD.tasks && !LD.err.tasks && LIVE_USER.role !== "VIEWER") liveLoad("tasks");
+    if (!DK.list && !DK.err) dkLoad();
+    let langkah = "";
+    if (p.asal === "order") langkah = '<p class="sub-head" style="margin-top:16px">Checklist DBKL (' + s.siap + "/" + s.perlu + ')</p><ol class="pj-langkah">' + s.langkah.map((l) => '<li class="' + l.status + '"><span class="pj-tanda">' + (l.status === "siap" ? "✓" : l.status === "na" ? "N/A" : "") + "</span>" + esc(l.nama) + (l.tarikh ? ' <span class="small muted">' + esc(l.tarikh) + "</span>" : "") + "</li>").join("") + "</ol>";
+    if (p.asal === "program") langkah = '<p class="sub-head" style="margin-top:16px">Tahap program</p><ol class="pj-langkah">' + [["Event", s.tahap.event], ["Report", s.tahap.report], ["Submission", s.tahap.submission]].map(([n, v]) => '<li class="' + (v === "siap" ? "siap" : "belum") + '"><span class="pj-tanda">' + (v === "siap" ? "✓" : "") + "</span>" + n + "</li>").join("") + "</ol>" +
+      (s.linkReport && /^https?:\/\//i.test(s.linkReport) ? '<p class="small"><a href="' + esc(s.linkReport) + '" target="_blank" rel="noopener noreferrer">Buka laporan ↗</a></p>' : "");
+    const tugasan = '<p class="sub-head pj-sub" style="margin-top:16px"><span>Tugasan (' + p.tugasan.length + ")</span>" + (bolehTugas ? btn("+ Tugasan", "pj-tugasan", "small", ' data-ref="' + esc(p.ref) + '"') : "") + "</p>" +
+      (p.tugasan.length ? '<ul class="live-list">' + p.tugasan.map((t) => '<li><button type="button" class="text-link tnum" data-action="lt-open" data-id="' + esc(t.task_id) + '">' + esc(t.task_id) + "</button><span>" + esc(t.title) + " · " + ltBadge(t) + '</span><span class="muted small">' + (t.due_date ? "Tarikh akhir " + esc(isoKeHbt(t.due_date)) : "") + "</span></li>").join("") + "</ul>" : '<p class="small muted">' + (LD.tasks ? "Belum ada tugasan untuk projek ini." : "Memuatkan tugasan…") + "</p>");
+    const dokumen = '<p class="sub-head pj-sub" style="margin-top:16px"><span>Dokumen (' + p.dokumen.length + ")</span>" + (DK.bolehTambah ? btn("+ Dokumen", "pj-dokumen", "small", ' data-ref="' + esc(p.ref) + '"') : "") + "</p>" +
+      (p.dokumen.length ? '<ul class="live-list">' + p.dokumen.map((d) => '<li><button type="button" class="text-link" data-action="dk-lihat" data-id="' + esc(d.doc_id) + '">' + esc(d.tajuk) + "</button><span>" + esc(d.kategori) + " · " + esc((DK_JENIS[d.jenis] || DK_JENIS.LINK)[0]) + "</span></li>").join("") + "</ul>" : '<p class="small muted">' + (DK.list ? "Belum ada dokumen untuk projek ini." : "Memuatkan dokumen…") + "</p>");
+    const ubah = PJ.bolehUrus && !PJ.tiada ? btn("Ubah maklumat", "pj-ubah", "", ' data-ref="' + esc(p.ref) + '"') + " " : "";
+    const ops = p.asal === "order" ? btn("Buka order (gambar signboard)", "live-order", "", ' data-id="' + esc(s.id) + '"') + " " : p.asal === "program" ? btn("Buka rekod program", "live-detail", "", ' data-kunci="' + esc(s.kunci) + '"') + " " : "";
+    openInfo({ title: p.nama, actions: ubah + ops, body: detailList([
+      ["Status", pjBadge(p.status) + (p.nota ? ' <span class="small muted">' + esc(p.nota) + "</span>" : "")], ["Kemajuan", progress(p.kemajuan || 0, p.status === "SELESAI" ? "good" : "")],
+      ["Jenis", esc(PJ_JENIS[p.jenis] || p.jenis)], ["Rujukan", esc(p.rujukan || "—")], ["Pelanggan", esc(p.pelanggan || (p.asal !== "manual" ? p.nama : "") || "—")], ["Lokasi", esc(p.lokasi || "—")],
+      ["Tarikh", esc(isoKeHbt(p.tarikh) || "—")], ["PM", esc(p.pm ? namaPapar(p.pm) : "—")], ["Tarikh sasaran", esc(isoKeHbt(p.sasaran) || "—")], ["Catatan", p.catatan ? esc(p.catatan).replace(/\n/g, "<br>") : "—"],
+      ["ID projek", '<span class="tnum small">' + esc(p.ref) + "</span>"]
+    ]) + langkah + tugasan + dokumen });
+    modal.classList.add("modal-slip"); setTimeout(() => modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true }), 0);
+    // Tugasan / dokumen belum sampai: papar semula projek yang sama bila data tiba
+    if (tunggu) { const tajuk = p.nama; setTimeout(() => { const h = modal.querySelector("#modal-title"); if (modal.open && h && h.textContent === tajuk && modal.querySelector(".pj-sub")) pjBuka(ref); }, 900); }
+  }
+
+  function pjBorang(ref) {
+    const p = ref ? pjCari(ref) : null, auto = p && p.sumber === "AUTO", m = p ? (PJ.meta || []).find((x) => x.project_id === p.ref) || {} : {};
+    const pmOpt = [["", "— Tiada —"]].concat(PJ.pm.map((u) => [u.emel, namaPapar(u.nama)]));
+    const stOpt = Object.entries(PJ_STATUS).map(([k, v]) => [k, v[0]]);
+    const fields = auto ? [
+      { name: "pm", label: "PM bertanggungjawab", type: "select", options: pmOpt, value: m.pm || "" },
+      { name: "tarikh_sasaran", label: "Tarikh sasaran siap", type: "date", value: m.tarikh_sasaran || "" },
+      { name: "status", label: "Status", type: "select", options: [["", "Ikut rekod Sheet (" + (PJ_STATUS[p.statusSheet] || [p.statusSheet])[0] + ")"]].concat(stOpt), value: m.status || "" },
+      { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 1000, value: m.catatan || "" }
+    ] : [
+      { name: "nama", label: "Nama projek", required: true, full: true, maxlength: 150, value: m.nama || "" },
+      { name: "jenis", label: "Jenis", type: "select", options: Object.keys(PJ_KOD).concat(["SIGNBOARD 3A", "SIGNBOARD 3B", "LAIN-LAIN"]).map((k) => [k, PJ_JENIS[k]]), value: m.jenis || "LAIN-LAIN" },
+      { name: "pelanggan", label: "Pelanggan", maxlength: 150, value: m.pelanggan || "" },
+      { name: "rujukan", label: "No. rujukan (pilihan)", maxlength: 80, value: m.rujukan || "" },
+      { name: "lokasi", label: "Lokasi", maxlength: 200, value: m.lokasi || "" },
+      { name: "pm", label: "PM bertanggungjawab", type: "select", options: pmOpt, value: m.pm || "" },
+      { name: "status", label: "Status", type: "select", options: stOpt, value: m.status || "BARU" },
+      { name: "tarikh_mula", label: "Tarikh mula", type: "date", value: m.tarikh_mula || "" },
+      { name: "tarikh_sasaran", label: "Tarikh sasaran siap", type: "date", value: m.tarikh_sasaran || "" },
+      { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 1000, value: m.catatan || "" }
+    ];
+    openForm({ live: true, title: p ? "Ubah: " + p.nama : "Projek Baharu", submit: p ? "Simpan" : "Cipta Projek", fields,
+      intro: auto ? note("Maklumat asal (tetuan, no. fail, tarikh, checklist) datang dari Sheet operasi dan tidak diubah di sini.") : p ? "" : note("Gunakan hanya untuk kerja yang tiada dalam rekod Program atau Order Signboard. Projek Comstra / SLU / Signboard dicipta automatik."),
+      onSubmit: async (v) => {
+        try {
+          const o = await LIVE.api("projects.save", Object.assign({ sumber: auto ? "AUTO" : "MANUAL", project_id: p ? p.ref : "" }, v));
+          toast(p ? "Disimpan." : "Projek dicipta: " + o.project_id);
+          PJ.meta = null; PJ.busy = false;
+          await LIVE.api("projects.meta").then((x) => { PJ.meta = x.meta || []; PJ.bolehUrus = !!x.bolehUrus; PJ.pm = x.pm || []; });
+          refresh(); pjBuka(o.project_id);
+        } catch (e) { toast(e.message); }
+      } });
+  }
+
   /* ========== Pusat Dokumen (pautan Canva / Google Drive / lain) ========== */
   /* Mod LIVE: docs.list / docs.save / docs.hide (tab DOKUMEN, SCE-DEV-TASKS).
    * Tanpa login (?demo=1): PRATONTON sahaja, rekod dalam memori tab ini, tiada apa disimpan. */
@@ -1217,7 +1393,8 @@
   const DK_KAT = ["Surat Jemputan", "Surat", "Laporan", "Quotation / Invois", "Lukisan / Design", "Gambar", "Kontrak", "Lain-lain"];
   const DK_MAKS_PDF = 5 * 1024 * 1024;
   const dkCaraLalai = (kat) => (kat === "Laporan" ? "PAUTAN" : "PDF"); // Keputusan pemilik: Laporan guna pautan Canva; surat jemputan dll. PDF
-  const DK_RUJ = { UMUM: "Umum (syarikat)", PROGRAM: "Program / Sesi", SIGNBOARD: "Order Signboard", TUGASAN: "Tugasan" };
+  const DK_RUJ = { UMUM: "Umum (syarikat)", PROJEK: "Projek", PROGRAM: "Program / Sesi", SIGNBOARD: "Order Signboard", TUGASAN: "Tugasan" };
+  const dkRujTeks = (d) => { if (d.rujukan_jenis === "PROJEK") { const x = typeof pjCari === "function" && LD.program ? pjCari(d.rujukan) : null; return "Projek · " + (x ? x.nama : d.rujukan); } return (DK_RUJ[d.rujukan_jenis] || "Umum") + (d.rujukan ? " · " + d.rujukan : ""); };
   const DK_JENIS = { CANVA_EMBED: ["Canva", "Preview dalam app"], CANVA: ["Canva", "Buka di Canva"], DRIVE: ["Google Drive", "Preview dalam app"], DRIVE_FOLDER: ["Folder Drive", "Preview dalam app"], GOOGLE_DOC: ["Google Docs", "Preview dalam app"], LINK: ["Pautan", "Buka pautan"], PDF: ["PDF", "Preview dalam app"], QUOTATION: ["Quotation", "Buka quotation"] };
   const dkSaiz = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB");
   const dkDemo = () => !LIVE_USER;
@@ -1257,7 +1434,7 @@
     LIVE.api("docs.list")
       .then((o) => { DK.list = o.dokumen; DK.kategori = o.kategori; DK.bolehTambah = o.bolehTambah; DK.bolehPaparSemula = o.bolehPaparSemula; DK.err = null; })
       .catch((e) => { DK.err = e.message; })
-      .finally(() => { DK.busy = false; if (currentRoute() === "documents") refresh(); });
+      .finally(() => { DK.busy = false; if (["documents", "projects"].includes(currentRoute())) refresh(); });
   }
   function dkReload() { DK.list = null; DK.err = null; dkLoad(); refresh(); }
 
@@ -1276,7 +1453,7 @@
         '<button type="button" class="dk-muka dk-' + esc((d.jenis || "LINK").toLowerCase()) + '" data-action="dk-lihat" data-id="' + esc(d.doc_id) + '" aria-label="Lihat ' + esc(d.tajuk) + '"><span class="dk-logo">' + esc(j[0]) + '</span><span class="dk-mod">' + (boleh ? "▶ Preview" : "↗ " + esc(j[1])) + "</span></button>" +
         '<div class="dk-isi"><h3 class="dk-tajuk">' + esc(d.tajuk) + "</h3>" +
           '<p class="small"><span class="badge neutral">' + esc(d.kategori) + "</span>" + (d.akses === "PENGURUSAN" ? ' <span class="badge warn">Pengurusan</span>' : "") + (d.tersembunyi ? ' <span class="badge bad">Tersembunyi</span>' : "") + "</p>" +
-          (d.auto ? '<p class="small muted">' + (d.rujukan ? "No. Ruj. " + esc(d.rujukan) : "Quotation muktamad") + "</p>" : '<p class="small muted">' + esc(DK_RUJ[d.rujukan_jenis] || "Umum") + (d.rujukan ? " · " + esc(d.rujukan) : "") + "</p>") +
+          (d.auto ? '<p class="small muted">' + (d.rujukan ? "No. Ruj. " + esc(d.rujukan) : "Quotation muktamad") + "</p>" : '<p class="small muted">' + esc(dkRujTeks(d)) + "</p>") +
           (d.jenis === "PDF" && d.nama_fail ? '<p class="small muted dk-url">' + esc(d.nama_fail) + (d.saiz_bait ? " · " + dkSaiz(d.saiz_bait) : "") + "</p>" : "") +
           '<p class="small muted">' + esc(namaPapar(d.oleh || "")) + " · " + esc(dkTarikh(d.updated_at || d.created_at)) + "</p></div></article>";
     };
@@ -1289,8 +1466,9 @@
       "</section>";
   }
 
-  function dkBorang(d) {
+  function dkBorang(d, refProjek) {
     const ada = !!d, opsRuj = [];
+    const pjPra = refProjek ? pjCari(refProjek) : ada && d.rujukan_jenis === "PROJEK" ? pjCari(d.rujukan) : null;
     (LD.order || []).forEach((o) => opsRuj.push(o.id + (o.tetuan ? " · " + o.tetuan : "")));
     (LD.program || []).forEach((p) => opsRuj.push([p.noFail, p.tetuan].filter(Boolean).join(" · ")));
     ((LD.tasks && LD.tasks.tasks) || []).forEach((t) => opsRuj.push(t.task_id + " · " + t.title));
@@ -1300,8 +1478,8 @@
       { name: "cara", label: "Cara simpan", type: "select", full: true, options: [["PDF", "Muat naik fail PDF (maks 5 MB)"], ["PAUTAN", "Pautan Canva / Google Drive"]], value: ada ? (d.jenis === "PDF" ? "PDF" : "PAUTAN") : "PDF" },
       { name: "fail", label: ada && d.jenis === "PDF" ? "Fail PDF (pilih hanya jika mahu ganti)" : "Fail PDF", type: "file", full: true, help: ada && d.nama_fail ? "Fail semasa: " + d.nama_fail : "Contoh: surat jemputan yang telah ditandatangani." },
       { name: "url", label: "Pautan", type: "url", full: true, maxlength: 1000, value: ada ? d.url : "", help: dkPetunjuk(ada ? d.url : "") },
-      { name: "rujukan_jenis", label: "Dipaut kepada", type: "select", options: Object.entries(DK_RUJ), value: ada ? d.rujukan_jenis : "UMUM" },
-      { name: "rujukan", label: "Rujukan (ID order / program / tugasan)", maxlength: 120, value: ada ? d.rujukan : "", help: "Kosongkan jika Umum." },
+      { name: "rujukan_jenis", label: "Dipaut kepada", type: "select", options: Object.entries(DK_RUJ), value: refProjek ? "PROJEK" : ada ? d.rujukan_jenis : "UMUM" },
+      { name: "rujukan", label: "Projek / rujukan", maxlength: 250, value: pjPra ? pjLabel(pjPra) : ada ? d.rujukan : "", help: "Untuk Projek: taip nama tetuan, no. fail atau ID order dan pilih dari senarai." },
       { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 500, value: ada ? d.catatan : "" }
     ];
     if (dkUrus()) fields.push({ name: "akses", label: "Siapa boleh lihat", type: "select", options: [["SEMUA", "Semua pengguna SCE CENTRAL"], ["PENGURUSAN", "Pengurusan sahaja (SA / MG + pencipta)"]], value: ada ? d.akses : "SEMUA" });
@@ -1310,6 +1488,7 @@
       onSubmit: async (v) => {
         const cara = v.cara === "PAUTAN" ? "PAUTAN" : "PDF";
         const isi = { doc_id: ada ? d.doc_id : "", cara: cara, tajuk: v.tajuk, kategori: v.kategori, url: cara === "PAUTAN" ? v.url : "", rujukan_jenis: v.rujukan_jenis, rujukan: v.rujukan_jenis === "UMUM" ? "" : v.rujukan, catatan: v.catatan, akses: v.akses || (ada ? d.akses : "SEMUA") };
+        if (isi.rujukan_jenis === "PROJEK") { isi.rujukan = pjRefDariTeks(isi.rujukan) || (ada && d.rujukan_jenis === "PROJEK" && isi.rujukan === d.rujukan ? d.rujukan : ""); if (!isi.rujukan) { toast("Pilih projek dari senarai."); return; } }
         const p = cara === "PAUTAN" ? dkKenal(isi.url) : { jenis: "PDF" };
         if (!p) { toast("Pautan tidak sah. Mesti bermula dengan https://."); return; }
         const fail = cara === "PDF" && v.fail && v.fail.size ? v.fail : null;
@@ -1351,9 +1530,10 @@
     if (rEl && opsRuj.length) {
       const dl = document.createElement("datalist"); dl.id = "dk-ruj-senarai";
       opsRuj.slice(0, 400).forEach((x) => { const o = document.createElement("option"); o.value = x; dl.appendChild(o); });
-      modal.querySelector("form").appendChild(dl); rEl.setAttribute("list", dl.id);
+      modal.querySelector("form").appendChild(dl);
     }
-    const kemasRuj = () => { if (rEl) { rEl.disabled = rjEl.value === "UMUM"; if (rEl.disabled) rEl.value = ""; } };
+    if (rEl && LIVE_USER) pjDatalist(modal.querySelector("form"), rEl, "dk-projek-senarai");
+    const kemasRuj = () => { if (rEl) { rEl.disabled = rjEl.value === "UMUM"; if (rEl.disabled) rEl.value = ""; rEl.setAttribute("list", rjEl.value === "PROJEK" ? "dk-projek-senarai" : "dk-ruj-senarai"); } };
     if (rjEl) { rjEl.addEventListener("change", kemasRuj); kemasRuj(); }
   }
 
@@ -1378,14 +1558,14 @@
       badan = '<div class="dk-pautan-kad"><span class="dk-logo">' + esc(j[0]) + "</span><div><strong>" + esc(d.tajuk) + '</strong><p class="small muted dk-url">' + esc(d.url) + "</p>" +
         (d.jenis === "CANVA" ? '<p class="small">Preview dalam app belum aktif untuk design ini. Untuk aktifkan: buka design di Canva → <b>Share</b> → <b>More</b> → <b>Embed</b> → salin <b>Smart embed link</b>, kemudian Ubah dokumen ini dan tampal pautan itu.</p>' : "") + "</div></div>";
     }
-    const info = '<dl class="dk-info"><dt>Kategori</dt><dd>' + esc(d.kategori) + "</dd><dt>Dipaut kepada</dt><dd>" + esc(DK_RUJ[d.rujukan_jenis] || "Umum") + (d.rujukan ? " · " + esc(d.rujukan) : "") + "</dd><dt>Ditambah oleh</dt><dd>" + esc(namaPapar(d.oleh || "—")) + " · " + esc(dkTarikh(d.created_at)) + "</dd>" + (d.catatan ? "<dt>Catatan</dt><dd>" + esc(d.catatan).replace(/\n/g, "<br>") + "</dd>" : "") + "</dl>";
+    const info = '<dl class="dk-info"><dt>Kategori</dt><dd>' + esc(d.kategori) + "</dd><dt>Dipaut kepada</dt><dd>" + esc(dkRujTeks(d)) + "</dd><dt>Ditambah oleh</dt><dd>" + esc(namaPapar(d.oleh || "—")) + " · " + esc(dkTarikh(d.created_at)) + "</dd>" + (d.catatan ? "<dt>Catatan</dt><dd>" + esc(d.catatan).replace(/\n/g, "<br>") + "</dd>" : "") + "</dl>";
     openInfo({ title: d.doc_id + " · " + d.tajuk, body: badan + info, actions: papar + ubah + buka });
     modal.classList.add("modal-slip"); modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true });
   }
 
   const dkButangUrus = (d) => (d.bolehUbah ? btn("Ubah", "dk-ubah", "", ' data-id="' + esc(d.doc_id) + '"') + " " + (d.tersembunyi ? "" : btn("Sorok", "dk-sorok", "", ' data-id="' + esc(d.doc_id) + '"')) + " " : "") +
     (d.tersembunyi && DK.bolehPaparSemula ? btn("Papar semula", "dk-sorok", "", ' data-id="' + esc(d.doc_id) + '" data-papar="1"') + " " : "");
-  const dkInfo = (d) => '<dl class="dk-info"><dt>Kategori</dt><dd>' + esc(d.kategori) + "</dd><dt>Dipaut kepada</dt><dd>" + esc(DK_RUJ[d.rujukan_jenis] || "Umum") + (d.rujukan ? " · " + esc(d.rujukan) : "") + "</dd>" + (d.nama_fail ? "<dt>Fail</dt><dd>" + esc(d.nama_fail) + (d.saiz_bait ? " · " + dkSaiz(d.saiz_bait) : "") + "</dd>" : "") + "<dt>Ditambah oleh</dt><dd>" + esc(namaPapar(d.oleh || "—")) + " · " + esc(dkTarikh(d.created_at)) + "</dd>" + (d.catatan ? "<dt>Catatan</dt><dd>" + esc(d.catatan).replace(/\n/g, "<br>") + "</dd>" : "") + "</dl>";
+  const dkInfo = (d) => '<dl class="dk-info"><dt>Kategori</dt><dd>' + esc(d.kategori) + "</dd><dt>Dipaut kepada</dt><dd>" + esc(dkRujTeks(d)) + "</dd>" + (d.nama_fail ? "<dt>Fail</dt><dd>" + esc(d.nama_fail) + (d.saiz_bait ? " · " + dkSaiz(d.saiz_bait) : "") + "</dd>" : "") + "<dt>Ditambah oleh</dt><dd>" + esc(namaPapar(d.oleh || "—")) + " · " + esc(dkTarikh(d.created_at)) + "</dd>" + (d.catatan ? "<dt>Catatan</dt><dd>" + esc(d.catatan).replace(/\n/g, "<br>") + "</dd>" : "") + "</dl>";
   /** PDF: dimuat dari Drive app (mod sebenar) atau dari memori (pratonton), dipapar dalam pelihat PDF pelayar. */
   async function dkLihatPdf(d) {
     const tajuk = d.doc_id + " · " + d.tajuk;
@@ -2300,6 +2480,12 @@
       openForm({ live: true, title: (papar ? "Papar semula " : "Sorok ") + id, submit: papar ? "Papar" : "Sorok", fields: [{ name: "sebab", label: "Sebab", type: "textarea", required: true, full: true, maxlength: 200 }],
         onSubmit: async (d) => { try { await LIVE.api("tasks.lampiran.hide", { lampiran_id: id, sebab: d.sebab, papar: papar }); toast("Dikemas kini."); } catch (e) { toast(e.message); } liveTaskOpen(task); } });
     },
+    "pj-buka"(el) { pjBuka(el.dataset.ref); },
+    "pj-baru"() { pjBorang(null); },
+    "pj-ubah"(el) { pjBorang(el.dataset.ref); },
+    "pj-tugasan"(el) { liveTaskNew(el.dataset.ref); },
+    "pj-dokumen"(el) { dkBorang(null, el.dataset.ref); },
+    "pj-tapis"(el) { const t = el.dataset.tapis; state.filters["pj.status"] = t === "Selesai" ? "Selesai" : "Aktif"; state.filters["pj.jenis"] = t === "Signboard" ? "Signboard" : "Semua"; refresh(); },
     "dk-reload"() { dkReload(); },
     "dk-tambah"() { dkBorang(null); },
     "dk-lihat"(el) { dkLihat(el.dataset.id); },
@@ -2764,6 +2950,13 @@
     // Segar semula profil (role, jawatan, kebenaran PAYROLL) di latar; muat semula jika berubah.
     if (LIVE_USER) LIVE.api("auth.me").then((m) => { const a = LIVE_USER, b = m.user; if (a.role !== b.role || a.nama !== b.nama || a.jawatan !== b.jawatan || !!a.payroll !== !!b.payroll) { LIVE.setUser(b); location.reload(); } }).catch(() => { /* api() mengurus sesi tamat */ });
     // Pautan dari emel: ?tugasan=SCE-TSK-... membuka butiran tugasan (selepas log masuk).
+    const keProjek = LIVE_USER && new URLSearchParams(location.search).get("projek");
+    if (keProjek && /^(PRG|ORD|PRJ)-[A-Z0-9-]{2,56}$/.test(keProjek)) {
+      try { history.replaceState(null, "", location.pathname + "#projects"); } catch (e) { /* abaikan */ }
+      if (currentRoute() !== "projects") location.hash = "#projects";
+      const cuba = (n) => { if (LD.program && LD.order) pjBuka(keProjek); else if (n > 0) setTimeout(() => cuba(n - 1), 700); };
+      setTimeout(() => cuba(30), 500);
+    }
     const dariEmel = LIVE_USER && new URLSearchParams(location.search).get("tugasan");
     if (dariEmel && /^SCE-TSK-[0-9]{4}-[0-9]{4}$/.test(dariEmel)) {
       try { history.replaceState(null, "", location.pathname + "#tasks"); } catch (e) { /* abaikan */ }
