@@ -633,3 +633,17 @@ button.pop-link { width: 100%; text-align: left; background: none; border: 0; fo
 .pj-langkah li.siap .pj-tanda { background: #1E8E5A; border-color: #1E8E5A; color: #fff; }
 .pj-langkah li.na { color: var(--muted, #667); }
 .pj-langkah li.na .pj-tanda { background: var(--surface-sunk); }
+
+/* Pemilih projek (16/11/2026) */
+.pj-pilih { display: grid; gap: 8px; }
+.pj-pilih-cari { width: 100%; font: inherit; font-size: 15px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: var(--surface); color: var(--text); }
+.pj-pilih-senarai { display: grid; gap: 6px; max-height: 320px; overflow-y: auto; }
+.pj-pilih-senarai > p { margin: 2px 0 0; }
+.pj-pilih-kad { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; color: inherit; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: var(--surface); cursor: pointer; }
+button.pj-pilih-kad:hover, button.pj-pilih-kad:focus-visible { border-color: var(--accent, #33C2B8); background: var(--surface-sunk); outline: none; }
+.pj-pilih-kad.dipilih { cursor: default; border: 2px solid var(--accent, #33C2B8); background: var(--surface-sunk); }
+.pj-pilih-isi { flex: 1; min-width: 0; display: grid; gap: 4px; }
+button.pj-pilih-kad { display: grid; gap: 4px; }
+.pj-pilih-nama { font-weight: 600; overflow-wrap: anywhere; }
+.pj-pilih-info { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pj-pilih-tanda { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #1E8E5A; color: #fff; font-weight: 700; }

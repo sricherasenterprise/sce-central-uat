@@ -846,7 +846,7 @@
     const p = (LD.tasks && LD.tasks.pengguna) || [];
     const opt = p.map((u) => [u.emel, u.nama + " (" + LIVE.roleLabel(u.role) + ")"]);
     openForm({ live: true, title: "Tugasan Baharu", submit: "Cipta Tugasan", intro: note("Penyemak tidak boleh menjadi assignee. Assignee utama perlu menerima tugasan sebelum mula."), fields: [
-      { name: "projek", label: "Projek (pilihan)", full: true, maxlength: 250, value: pj ? pjLabel(pj) : "", help: "Taip nama tetuan, no. fail atau ID order, kemudian pilih dari senarai." },
+      { name: "projek", label: "Projek (pilihan)", full: true, maxlength: 250, value: pj ? pjLabel(pj) : "", help: "Pilihan. Cari dan klik projek untuk tugasan ini; biarkan kosong jika tiada." },
       { name: "category", label: "Kategori tugasan", type: "select", required: true, full: true, value: pj ? PJ_KAT_TUGASAN[pj.jenis] || "Lain-lain" : "", options: [["", "Pilih kategori…"], "Signboard Kaedah 3A", "Signboard Kaedah 3B", "Communication Strategy", "Sesi Libat Urus (SLU)", "Lain-lain"] },
       { name: "title", label: "Tajuk", required: true, maxlength: 200, full: true },
       { name: "description", label: "Keterangan", type: "textarea", full: true, maxlength: 2000 },
@@ -863,7 +863,7 @@
       dt.team = (dt.team || []).join(","); ltCall("tasks.create", { data: dt }, "Tugasan dicipta.");
     } });
     const fm = modal.querySelector("form"), pjEl = fm.querySelector("[name=projek]"), katEl = fm.querySelector("[name=category]");
-    pjDatalist(fm, pjEl, "lt-projek-senarai");
+    pjPemilih(pjEl);
     pjEl.addEventListener("change", () => { const x = pjCari(pjRefDariTeks(pjEl.value)); if (x && PJ_KAT_TUGASAN[x.jenis]) katEl.value = PJ_KAT_TUGASAN[x.jenis]; });
   }
   async function liveTaskOpen(id) {
@@ -1289,18 +1289,51 @@
     return out;
   }
   const pjCari = (ref) => pjSemua().find((p) => p.ref === ref);
-  /** Isi datalist pilihan projek (untuk borang tugasan / dokumen). */
-  function pjDatalist(form, input, id) {
-    const dl = document.createElement("datalist"); dl.id = id;
-    const isi = () => { dl.textContent = ""; pjSemua().filter((p) => p.status !== "BATAL").sort((a, b) => (b.tarikh || "").localeCompare(a.tarikh || "")).forEach((p) => { const o = document.createElement("option"); o.value = pjLabel(p); dl.appendChild(o); }); };
-    isi();
-    form.appendChild(dl); input.setAttribute("list", id); input.setAttribute("autocomplete", "off");
-    // Data Program / Order / projek manual belum sampai: isi semula bila tiba (maks ~20 s)
-    if (!LD.program || !LD.order || PJ.meta === null) {
+  /**
+   * Pemilih projek (untuk borang tugasan / pautan / dokumen): kotak carian + kad pendek; projek terpilih dipapar jelas.
+   * Nilai disimpan dalam `input` (disorok) sebagai pjLabel(p), jadi pjRefDariTeks() kekal berfungsi.
+   * Pulangkan { papar(bool) } untuk menunjuk / menyorok pemilih (contoh Documents bila "Dipaut kepada" bukan Projek).
+   */
+  function pjPemilih(input) {
+    const wrap = document.createElement("div"); wrap.className = "pj-pilih";
+    wrap.innerHTML = '<div class="pj-pilih-terpilih"></div><input type="search" class="pj-pilih-cari" placeholder="Cari nama tetuan, no. fail atau ID order…" autocomplete="off" aria-label="Cari projek"><div class="pj-pilih-senarai" role="list"></div>';
+    const terpilih = wrap.querySelector(".pj-pilih-terpilih"), cari = wrap.querySelector(".pj-pilih-cari"), senarai = wrap.querySelector(".pj-pilih-senarai");
+    input.hidden = true; input.insertAdjacentElement("afterend", wrap);
+    const kad = (p) => '<span class="pj-pilih-nama">' + esc(p.nama) + '</span><span class="pj-pilih-info"><span class="badge neutral">' + esc(PJ_JENIS[p.jenis] || p.jenis) + "</span> " + pjBadge(p.status) + ' <span class="small muted">' + esc(p.rujukan || (p.asal === "program" ? "Tiada No. Fail" : p.ref)) + (p.tarikh ? " · " + esc(isoKeHbt(p.tarikh)) : "") + "</span></span>";
+    const sedia = () => LD.program && LD.order && PJ.meta !== null;
+    function render() {
+      const ref = pjRefDariTeks(input.value), p = ref ? pjCari(ref) : null;
+      if (p) {
+        terpilih.innerHTML = '<div class="pj-pilih-kad dipilih"><span class="pj-pilih-tanda" aria-hidden="true">✓</span><span class="pj-pilih-isi">' + kad(p) + '</span><button type="button" class="btn small pj-pilih-tukar">Tukar</button></div>';
+        cari.hidden = true; senarai.hidden = true; return;
+      }
+      terpilih.innerHTML = ref ? '<p class="small muted">Projek ' + esc(ref) + " sedang dimuatkan…</p>" : "";
+      cari.hidden = false; senarai.hidden = false;
+      if (!sedia()) { senarai.innerHTML = '<p class="small muted" role="status">Memuatkan senarai projek…</p>'; return; }
+      const kata = cari.value.toLowerCase().split(/\s+/).filter(Boolean);
+      const aktif = (x) => !["SELESAI", "BATAL"].includes(x.status);
+      const list = pjSemua().filter((x) => x.status !== "BATAL" && kata.every((w) => x.cari.includes(w)))
+        .sort((a, b) => (aktif(b) - aktif(a)) || (b.tarikh || "").localeCompare(a.tarikh || ""));
+      senarai.innerHTML = (list.length ? list.slice(0, 6).map((x) => '<button type="button" class="pj-pilih-kad" data-pjref="' + esc(x.ref) + '">' + kad(x) + "</button>").join("") : '<p class="small muted">Tiada projek sepadan dengan "' + esc(cari.value) + '".</p>') +
+        (list.length > 6 ? '<p class="small muted">+ ' + (list.length - 6) + " projek lagi. Taip untuk menapis.</p>" : "") +
+        '<p class="small muted">' + (kata.length ? "" : "Projek aktif dipapar dahulu. ") + "Tiada dalam senarai? Cipta di Projects → + Projek Baharu, kemudian pilih di sini.</p>";
+    }
+    const set = (v) => { input.value = v; input.dispatchEvent(new Event("change", { bubbles: true })); render(); };
+    wrap.addEventListener("click", (ev) => {
+      const k = ev.target.closest("[data-pjref]");
+      if (k) { const x = pjCari(k.dataset.pjref); if (x) set(pjLabel(x)); return; }
+      if (ev.target.closest(".pj-pilih-tukar")) { set(""); cari.value = ""; render(); cari.focus(); }
+    });
+    cari.addEventListener("input", render);
+    cari.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); const k = senarai.querySelector("[data-pjref]"); if (k) k.click(); } });
+    render();
+    // Data Program / Order / projek manual belum sampai: papar semula bila tiba (maks ~20 s)
+    if (!sedia()) {
       if (!LD.program) liveLoad("program"); if (!LD.order) liveLoad("order"); if (PJ.meta === null) pjLoad();
-      let n = 0; const ulang = () => { if (!dl.isConnected) return; if (LD.program && LD.order && PJ.meta !== null) { isi(); return; } if (++n < 40) setTimeout(ulang, 500); };
+      let n = 0; const ulang = () => { if (!wrap.isConnected) return; if (sedia()) { render(); return; } if (++n < 40) setTimeout(ulang, 500); };
       setTimeout(ulang, 500);
     }
+    return { papar(ya) { wrap.hidden = !ya; input.hidden = ya; if (ya) render(); } };
   }
 
   function viewProjectsLive() {
@@ -1372,7 +1405,7 @@
     if (!LD.program) liveLoad("program"); if (!LD.order) liveLoad("order");
     const kini = t.project_id ? pjCari(t.project_id) : null;
     openForm({ live: true, title: (t.project_id ? "Tukar projek: " : "Pautkan ke projek: ") + t.task_id, submit: "Simpan", fields: [
-      { name: "projek", label: "Projek", full: true, maxlength: 250, value: kini ? pjLabel(kini) : "", help: "Taip nama tetuan, no. fail atau ID order dan pilih dari senarai. Kosongkan untuk membuang pautan." }
+      { name: "projek", label: "Projek", full: true, maxlength: 250, value: kini ? pjLabel(kini) : "", help: "Cari dan klik projek. Tekan Tukar kemudian Simpan tanpa memilih untuk membuang pautan." }
     ], intro: note("Tugasan: " + t.title + ". Perubahan direkod dalam sejarah tugasan."),
       onSubmit: async (v) => {
         const teks = String(v.projek || "").trim(), ref = teks ? pjRefDariTeks(teks) : "";
@@ -1381,7 +1414,7 @@
         catch (e) { toast(e.message); }
         LD.tasks = null; liveLoad("tasks"); liveTaskOpen(t.task_id);
       } });
-    const fm = modal.querySelector("form"); pjDatalist(fm, fm.querySelector("[name=projek]"), "lt-paut-senarai");
+    const fm = modal.querySelector("form"); pjPemilih(fm.querySelector("[name=projek]"));
   }
 
   function pjBorang(ref) {
@@ -1511,7 +1544,7 @@
       { name: "fail", label: ada && d.jenis === "PDF" ? "Fail PDF (pilih hanya jika mahu ganti)" : "Fail PDF", type: "file", full: true, help: ada && d.nama_fail ? "Fail semasa: " + d.nama_fail : "Contoh: surat jemputan yang telah ditandatangani." },
       { name: "url", label: "Pautan", type: "url", full: true, maxlength: 1000, value: ada ? d.url : "", help: dkPetunjuk(ada ? d.url : "") },
       { name: "rujukan_jenis", label: "Dipaut kepada", type: "select", options: Object.entries(DK_RUJ), value: refProjek ? "PROJEK" : ada ? d.rujukan_jenis : "UMUM" },
-      { name: "rujukan", label: "Projek / rujukan", maxlength: 250, value: pjPra ? pjLabel(pjPra) : ada ? d.rujukan : "", help: "Untuk Projek: taip nama tetuan, no. fail atau ID order dan pilih dari senarai." },
+      { name: "rujukan", label: "Projek / rujukan", maxlength: 250, value: pjPra ? pjLabel(pjPra) : ada ? d.rujukan : "", help: "Untuk Projek: cari dan klik projek. Untuk pilihan lain: taip rujukan." },
       { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 500, value: ada ? d.catatan : "" }
     ];
     if (dkUrus()) fields.push({ name: "akses", label: "Siapa boleh lihat", type: "select", options: [["SEMUA", "Semua pengguna SCE CENTRAL"], ["PENGURUSAN", "Pengurusan sahaja (SA / MG + pencipta)"]], value: ada ? d.akses : "SEMUA" });
@@ -1564,8 +1597,9 @@
       opsRuj.slice(0, 400).forEach((x) => { const o = document.createElement("option"); o.value = x; dl.appendChild(o); });
       modal.querySelector("form").appendChild(dl);
     }
-    if (rEl && LIVE_USER) pjDatalist(modal.querySelector("form"), rEl, "dk-projek-senarai");
-    const kemasRuj = () => { if (rEl) { rEl.disabled = rjEl.value === "UMUM"; if (rEl.disabled) rEl.value = ""; rEl.setAttribute("list", rjEl.value === "PROJEK" ? "dk-projek-senarai" : "dk-ruj-senarai"); } };
+    const pemilih = rEl && LIVE_USER ? pjPemilih(rEl) : null;
+    if (rEl) rEl.setAttribute("list", "dk-ruj-senarai");
+    const kemasRuj = () => { if (!rEl) return; const pj = rjEl.value === "PROJEK"; rEl.disabled = rjEl.value === "UMUM"; if (rEl.disabled || (!pj && pjRefDariTeks(rEl.value))) rEl.value = ""; if (pemilih) pemilih.papar(pj); };
     if (rjEl) { rjEl.addEventListener("change", kemasRuj); kemasRuj(); }
   }
 
