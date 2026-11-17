@@ -878,14 +878,34 @@
     openInfo({ title: t.task_id + " · " + t.title, actions: acts, body: detailList([
       ["Status", ltBadge(t)], ["Kemajuan", progress(Number(t.progress) || 0)], ["Assignee utama", esc(t.nama.primary)], ["Ahli tambahan", esc(t.team || "—")],
       ["Pemberi tugas", esc(t.nama.assigned_by)], ["Penyemak", esc(t.nama.reviewer)], ["Tarikh akhir", t.due_date ? dueText(t.due_date, ["COMPLETED", "CANCELLED"].includes(t.status)) : "—"],
-      ["Projek", (t.project_id ? (() => { const x = pjCari(t.project_id); return '<button type="button" class="text-link" data-action="pj-buka" data-ref="' + esc(t.project_id) + '">' + esc(x ? x.nama : t.project_id) + "</button>"; })() : "—") +
+      ["Projek", (t.project_id ? (() => { const x = pjCari(t.project_id); return '<button type="button" class="text-link" id="lt-pj-nama" data-action="pj-buka" data-ref="' + esc(t.project_id) + '">' + esc(x ? x.nama : t.project_id) + "</button>"; })() : "—") +
         (["SUPER_ADMIN", "MANAGEMENT"].includes(LIVE_USER.role) || t.assigned_by === LIVE_USER.emel ? " " + btn(t.project_id ? "Tukar" : "Pautkan ke projek", "lt-projek", "small", ' data-id="' + esc(t.task_id) + '"') : "")],
       ["Kategori", esc(t.category || "—")], ["Keterangan", esc(t.description || "—")], ["Sebab tolak", esc(t.reject_reason || "—")]
-    ]) + '<p class="sub-head" style="margin-top:16px">Lampiran / Bukti</p><div id="lampiran-tugasan" data-task="' + esc(t.task_id) + '"><p class="small muted" role="status">Memuatkan lampiran…</p></div>' +
+    ]) + (t.project_id ? '<p class="sub-head pj-sub" style="margin-top:16px"><span>Dokumen projek</span><span id="dk-tugasan-butang"></span></p><div id="dk-tugasan" data-ref="' + esc(t.project_id) + '"><p class="small muted" role="status">Memuatkan dokumen projek…</p></div>' : "") +
+      '<p class="sub-head" style="margin-top:16px">Lampiran / Bukti</p><div id="lampiran-tugasan" data-task="' + esc(t.task_id) + '"><p class="small muted" role="status">Memuatkan lampiran…</p></div>' +
       '<p class="sub-head" style="margin-top:16px">Sejarah</p>' + timeline(sej, "Tiada sejarah.") });
     state.ltTask = t;
+    if (t.project_id) ltDokumenProjek(t.project_id);
     ltLampiranMuat(t.task_id);
     if (LD.notif && (LD.notif.notifikasi || []).some((n) => n.task_id === t.task_id && !n.dibaca)) ltTandaDibaca({ task_id: t.task_id });
+  }
+  /* ---------- Dokumen projek dalam butiran tugasan (contoh: laporan Canva untuk disemak) ---------- */
+  function ltDokumenProjek(ref, cubaan) {
+    const el = document.querySelector('#dk-tugasan[data-ref="' + ref + '"]'); if (!el) return;
+    // Nama projek: muat data Program / Order jika belum ada, kemudian ganti kod dengan nama
+    if (!LD.program) liveLoad("program"); if (!LD.order) liveLoad("order");
+    const nm = document.getElementById("lt-pj-nama"), x = LD.program && LD.order ? pjCari(ref) : null;
+    if (nm && x) nm.textContent = x.nama;
+    if ((!LD.program || !LD.order) && (cubaan || 0) < 40) { setTimeout(() => ltDokumenProjek(ref, (cubaan || 0) + 1), 500); if (!DK.list) { if (!DK.err) dkLoad(); return; } }
+    if (!DK.list) {
+      if (DK.err) { el.innerHTML = '<p class="small muted">' + esc(DK.err) + "</p>"; return; }
+      dkLoad(); if ((cubaan || 0) < 40) setTimeout(() => ltDokumenProjek(ref, (cubaan || 0) + 1), 500); return;
+    }
+    const docs = DK.list.filter((d) => d.rujukan_jenis === "PROJEK" && d.rujukan === ref && !d.tersembunyi);
+    const b = document.getElementById("dk-tugasan-butang");
+    if (b) b.innerHTML = DK.bolehTambah ? btn("+ Dokumen", "pj-dokumen", "small", ' data-ref="' + esc(ref) + '"') : "";
+    el.innerHTML = docs.length ? '<ul class="live-list">' + docs.map((d) => '<li><button type="button" class="text-link" data-action="dk-lihat" data-id="' + esc(d.doc_id) + '">' + esc(d.tajuk) + "</button><span>" + esc(d.kategori) + " · " + esc((DK_JENIS[d.jenis] || DK_JENIS.LINK)[0]) + '</span><span class="muted small">' + esc(namaPapar(d.oleh || "")) + " · " + esc(dkTarikh(d.updated_at || d.created_at)) + "</span></li>").join("") + "</ul>"
+      : '<p class="small muted">Belum ada dokumen untuk projek ini. Laporan (link Canva) atau PDF boleh ditambah melalui + Dokumen.</p>';
   }
   /* ---------- Lampiran / bukti tugasan ---------- */
   /** Tanda notifikasi dibaca (ikut notif_id atau task_id), kemudian segar semula loceng. */
