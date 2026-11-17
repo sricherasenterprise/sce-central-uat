@@ -738,7 +738,7 @@
     }
     quick.push('<a class="btn" href="#operations">Buka Operations</a>');
     return '<section class="banner" aria-labelledby="welcome"><p class="banner-eyebrow">' + dayName + ", " + fmtDate(TODAY) + " · Sri Cheras Enterprise · " + esc(LIVE.roleLabel(u.role)) + (u.jawatan ? " · " + esc(u.jawatan) : "") + '</p><h1 id="welcome">' + greet + ", " + esc(namaPapar(u.nama || u.emel)) + '</h1><p class="lead">' + lead + "</p>" +
-      '<div class="quick"><div class="quick-row">' + quick.join("") + "</div></div></section>" + tugasanPanel + '<div style="margin-top:16px">' + liveOpsSummary() + "</div>";
+      '<div class="quick"><div class="quick-row">' + quick.join("") + "</div></div></section>" + tugasanPanel + (viewer ? "" : pjPanelDashboard()) + '<div style="margin-top:16px">' + liveOpsSummary() + "</div>";
   }
   const viewDashboard = () => (LIVE_USER ? liveDashboard() : ({ executive: dashExecutive, management: dashManagement, pm: dashPm, staff: dashStaff, viewer: dashViewer }[POLICY.dashboard])());
 
@@ -1357,6 +1357,26 @@
     return { papar(ya) { wrap.hidden = !ya; input.hidden = ya; if (ya) render(); } };
   }
 
+  /** Butang pintas dokumen projek program: + Laporan (link Canva) dan + Surat Jemputan (PDF). */
+  const pjButangDok = (p) => (DK.bolehTambah ? btn("+ Laporan", "pj-laporan", "small", ' data-ref="' + esc(p.ref) + '"') + btn("+ Surat Jemputan", "pj-surat", "small", ' data-ref="' + esc(p.ref) + '"') : "");
+  const pjAdaDok = (p, kat) => p.dokumen.some((d) => d.kategori === kat);
+  const pjTandaDok = (p, kat, label) => '<span class="pj-tanda-dok ' + (pjAdaDok(p, kat) ? "ada" : "tiada") + '">' + (pjAdaDok(p, kat) ? "✓ " : "○ ") + esc(label) + "</span>";
+  /** Panel Dashboard: projek Comstra / SLU aktif terkini dengan butang pintas + Laporan / + Surat Jemputan (17/11/2026). */
+  function pjPanelDashboard() {
+    if (!LD.program && !LD.err.program) liveLoad("program");
+    if (!LD.order && !LD.err.order) liveLoad("order");
+    if (!DK.list && !DK.err) dkLoad();
+    const sedia = LD.program && LD.order && DK.list;
+    const senarai = sedia ? pjSemua().filter((p) => p.asal === "program" && !["SELESAI", "BATAL"].includes(p.status)).sort((a, b) => (b.tarikh || "").localeCompare(a.tarikh || "")).slice(0, 6) : [];
+    return '<section class="panel" style="margin-top:16px">' + panelHead("Projek Comstra / SLU Aktif", sedia ? senarai.length + " projek terkini" : "", routeLink("projects", "Semua projek"), liveTag) +
+      (!sedia ? '<p class="muted small" role="status">' + (LD.err.program || DK.err ? esc(LD.err.program || DK.err) : "Memuatkan projek…") + "</p>"
+        : senarai.length ? '<ul class="pj-pintas">' + senarai.map((p) => '<li><div class="pj-pintas-info"><button type="button" class="text-link pj-nama" data-action="pj-buka" data-ref="' + esc(p.ref) + '">' + esc(p.nama) + "</button>" +
+          '<span class="small muted">' + esc(PJ_JENIS[p.jenis] || p.jenis) + " · " + esc(isoKeHbt(p.tarikh) || "Tarikh belum tetap") + " · " + esc(p.nota || "") + "</span>" +
+          '<span class="pj-tanda-baris">' + pjTandaDok(p, "Laporan", "Laporan") + pjTandaDok(p, "Surat Jemputan", "Surat jemputan") + "</span></div>" +
+          '<div class="pj-pintas-butang">' + pjButangDok(p) + "</div></li>").join("") + "</ul>"
+        : '<p class="muted small">Tiada projek Comstra / SLU aktif sekarang.</p>') + "</section>";
+  }
+
   function viewProjectsLive() {
     const head = (x) => pageHead("Projects", "Semua projek SCE di satu tempat: dicipta automatik daripada rekod Program dan Order Signboard, lengkap dengan tugasan dan dokumen. " + liveStamp("program"), (x || "") + " " + liveTag);
     const gate = liveGate("program") || liveGate("order");
@@ -1405,7 +1425,8 @@
       (s.linkReport && /^https?:\/\//i.test(s.linkReport) ? '<p class="small"><a href="' + esc(s.linkReport) + '" target="_blank" rel="noopener noreferrer">Buka laporan ↗</a></p>' : "");
     const tugasan = '<p class="sub-head pj-sub" style="margin-top:16px"><span>Tugasan (' + p.tugasan.length + ")</span>" + (bolehTugas ? btn("+ Tugasan", "pj-tugasan", "small", ' data-ref="' + esc(p.ref) + '"') : "") + "</p>" +
       (p.tugasan.length ? '<ul class="live-list">' + p.tugasan.map((t) => '<li><button type="button" class="text-link tnum" data-action="lt-open" data-id="' + esc(t.task_id) + '">' + esc(t.task_id) + "</button><span>" + esc(t.title) + " · " + ltBadge(t) + '</span><span class="muted small">' + (t.due_date ? "Tarikh akhir " + esc(isoKeHbt(t.due_date)) : "") + "</span></li>").join("") + "</ul>" : '<p class="small muted">' + (LD.tasks ? "Belum ada tugasan untuk projek ini." : "Memuatkan tugasan…") + "</p>");
-    const dokumen = '<p class="sub-head pj-sub" style="margin-top:16px"><span>Dokumen (' + p.dokumen.length + ")</span>" + (DK.bolehTambah ? btn("+ Dokumen", "pj-dokumen", "small", ' data-ref="' + esc(p.ref) + '"') : "") + "</p>" +
+    const dokumen = '<p class="sub-head pj-sub" style="margin-top:16px"><span>Dokumen (' + p.dokumen.length + ")</span><span class=\"pj-pintas-butang\">" + (p.asal === "program" ? pjButangDok(p) : "") + (DK.bolehTambah ? btn("+ Dokumen", "pj-dokumen", "small", ' data-ref="' + esc(p.ref) + '"') : "") + "</span></p>" +
+      (p.asal === "program" && DK.list ? '<p class="pj-tanda-baris">' + pjTandaDok(p, "Laporan", "Laporan") + pjTandaDok(p, "Surat Jemputan", "Surat jemputan") + "</p>" : "") +
       (p.dokumen.length ? '<ul class="live-list">' + p.dokumen.map((d) => '<li><button type="button" class="text-link" data-action="dk-lihat" data-id="' + esc(d.doc_id) + '">' + esc(d.tajuk) + "</button><span>" + esc(d.kategori) + " · " + esc((DK_JENIS[d.jenis] || DK_JENIS.LINK)[0]) + "</span></li>").join("") + "</ul>" : '<p class="small muted">' + (DK.list ? "Belum ada dokumen untuk projek ini." : "Memuatkan dokumen…") + "</p>");
     const ubah = PJ.bolehUrus && !PJ.tiada ? btn("Ubah maklumat", "pj-ubah", "", ' data-ref="' + esc(p.ref) + '"') + " " : "";
     const ops = p.asal === "order" ? btn("Buka order (gambar signboard)", "live-order", "", ' data-id="' + esc(s.id) + '"') + " " : p.asal === "program" ? btn("Buka rekod program", "live-detail", "", ' data-kunci="' + esc(s.kunci) + '"') + " " : "";
@@ -1520,7 +1541,7 @@
     LIVE.api("docs.list")
       .then((o) => { DK.list = o.dokumen; DK.kategori = o.kategori; DK.bolehTambah = o.bolehTambah; DK.bolehPaparSemula = o.bolehPaparSemula; DK.err = null; })
       .catch((e) => { DK.err = e.message; })
-      .finally(() => { DK.busy = false; if (["documents", "projects"].includes(currentRoute())) refresh(); });
+      .finally(() => { DK.busy = false; if (["documents", "projects", "dashboard"].includes(currentRoute())) refresh(); });
   }
   function dkReload() { DK.list = null; DK.err = null; dkLoad(); refresh(); }
 
@@ -1552,16 +1573,16 @@
       "</section>";
   }
 
-  function dkBorang(d, refProjek) {
+  function dkBorang(d, refProjek, katPra) {
     const ada = !!d, opsRuj = [];
     const pjPra = refProjek ? pjCari(refProjek) : ada && d.rujukan_jenis === "PROJEK" ? pjCari(d.rujukan) : null;
     (LD.order || []).forEach((o) => opsRuj.push(o.id + (o.tetuan ? " · " + o.tetuan : "")));
     (LD.program || []).forEach((p) => opsRuj.push([p.noFail, p.tetuan].filter(Boolean).join(" · ")));
     ((LD.tasks && LD.tasks.tasks) || []).forEach((t) => opsRuj.push(t.task_id + " · " + t.title));
     const fields = [
-      { name: "kategori", label: "Kategori", type: "select", required: true, options: [["", "Pilih kategori…"]].concat(DK.kategori || DK_KAT), value: ada ? d.kategori : "" },
+      { name: "kategori", label: "Kategori", type: "select", required: true, options: [["", "Pilih kategori…"]].concat(DK.kategori || DK_KAT), value: ada ? d.kategori : katPra || "" },
       { name: "tajuk", label: "Tajuk dokumen", required: true, maxlength: 150, value: ada ? d.tajuk : "" },
-      { name: "cara", label: "Cara simpan", type: "select", full: true, options: [["PDF", "Muat naik fail PDF (maks 5 MB)"], ["PAUTAN", "Pautan Canva / Google Drive"]], value: ada ? (d.jenis === "PDF" ? "PDF" : "PAUTAN") : "PDF" },
+      { name: "cara", label: "Cara simpan", type: "select", full: true, options: [["PDF", "Muat naik fail PDF (maks 5 MB)"], ["PAUTAN", "Pautan Canva / Google Drive"]], value: ada ? (d.jenis === "PDF" ? "PDF" : "PAUTAN") : katPra ? dkCaraLalai(katPra) : "PDF" },
       { name: "fail", label: ada && d.jenis === "PDF" ? "Fail PDF (pilih hanya jika mahu ganti)" : "Fail PDF", type: "file", full: true, help: ada && d.nama_fail ? "Fail semasa: " + d.nama_fail : "Contoh: surat jemputan yang telah ditandatangani." },
       { name: "url", label: "Pautan", type: "url", full: true, maxlength: 1000, value: ada ? d.url : "", help: dkPetunjuk(ada ? d.url : "") },
       { name: "rujukan_jenis", label: "Dipaut kepada", type: "select", options: Object.entries(DK_RUJ), value: refProjek ? "PROJEK" : ada ? d.rujukan_jenis : "UMUM" },
@@ -1569,7 +1590,7 @@
       { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 500, value: ada ? d.catatan : "" }
     ];
     // Keputusan pemilik 17/11/2026: tiada lagi pilihan "Pengurusan sahaja"; semua dokumen aktif dilihat semua pengguna.
-    openForm({ live: !dkDemo(), title: ada ? "Ubah " + d.doc_id : "Tambah Dokumen", submit: ada ? "Simpan" : "Tambah", fields: fields,
+    openForm({ live: !dkDemo(), title: ada ? "Ubah " + d.doc_id : katPra ? "+ " + katPra : "Tambah Dokumen", submit: ada ? "Simpan" : "Tambah", fields: fields,
       intro: dkDemo() ? note("Pratonton sahaja: tiada apa disimpan.") : "",
       onSubmit: async (v) => {
         const cara = v.cara === "PAUTAN" ? "PAUTAN" : "PDF";
@@ -1880,6 +1901,97 @@
       item: { elaun: L.elaun.map((l) => ({ label: l, amaun: "" })), bonus: [], tuntutan: L.tuntutan.map((l) => ({ label: l, amaun: "" })), potongan: L.potongan.map((l) => ({ label: l, amaun: "" })) } }, gjTarikhLalai(bulan));
     refresh();
   }
+  /* ---------- Resit / bukti slip (Tuntutan dan Potongan), 17/11/2026 ---------- */
+  const GJ_RESIT_LABEL = { tuntutan: ["Resit tuntutan", "Muat naik resit"], potongan: ["Bukti potongan", "Muat naik bukti"] };
+  function gjResitIsi(k, kunci) {
+    const R = GJ.resit, senarai = R.list.filter((x) => x.bahagian === k), ubah = R.bolehUbah && !kunci;
+    return '<div class="gj-resit-head"><span>📎 ' + esc(GJ_RESIT_LABEL[k][0]) + " (" + senarai.length + ")</span>" + (ubah ? btn("+ " + GJ_RESIT_LABEL[k][1], "gj-resit-tambah", "small", ' data-k="' + k + '"') : "") + "</div>" +
+      (senarai.length ? '<div class="gj-resit-senarai">' + senarai.map((x) => '<div class="gj-resit-item"><button type="button" class="gj-resit-muka" data-action="gj-resit-lihat" data-id="' + esc(x.resit_id) + '" aria-label="Lihat ' + esc(x.nama) + '">' +
+        (x.thumb && /^data:image\/jpeg;base64,/.test(x.thumb) ? '<img src="' + esc(x.thumb) + '" alt="">' : '<span class="gj-resit-pdf">PDF</span>') + "</button>" +
+        '<div class="gj-resit-info"><strong>' + esc(x.item_label || "Umum") + '</strong><span class="small muted">' + esc(x.nama) + (x.catatan ? " · " + esc(x.catatan) : "") + "</span></div>" +
+        (ubah ? '<button type="button" class="icon-btn btn-buang" data-action="gj-resit-buang" data-id="' + esc(x.resit_id) + '" aria-label="Buang resit ' + esc(x.nama) + '" title="Buang">' + icon("trash") + "</button>" : "") + "</div>").join("") + "</div>"
+        : '<p class="small muted">' + (k === "tuntutan" ? "Tiada resit lagi. Contoh: resit langganan, resit minyak." : "Tiada bukti lagi. Contoh: resit barang peribadi yang dibeli guna duit syarikat.") + "</p>");
+  }
+  function gjResitHtml(k, e, kunci) {
+    if (!e.slip_id) return '<p class="small muted gj-resit-nota">📎 Simpan draf dahulu untuk memuat naik ' + (k === "tuntutan" ? "resit tuntutan" : "bukti potongan") + ".</p>";
+    if (!GJ.resit || GJ.resit.slip_id !== e.slip_id) { gjResitMuat(e.slip_id); return '<div class="gj-resit" data-k="' + k + '"><p class="small muted" role="status">Memuatkan resit…</p></div>'; }
+    return '<div class="gj-resit" data-k="' + k + '">' + gjResitIsi(k, kunci) + "</div>";
+  }
+  async function gjResitMuat(id) {
+    if (GJ.resitBusy === id) return; GJ.resitBusy = id;
+    try { const o = await LIVE.api("payroll.resit.list", { slip_id: id }); GJ.resit = { slip_id: id, list: o.resit || [], bolehUbah: !!o.bolehUbah }; }
+    catch (x) { GJ.resit = { slip_id: id, list: [], bolehUbah: false }; toast("Resit: " + x.message); }
+    GJ.resitBusy = null;
+    // Kemas kini bahagian resit sahaja (tanpa refresh) supaya input yang sedang ditaip tidak hilang
+    const kunci = GJ.edit && GJ.edit.status === "MUKTAMAD";
+    document.querySelectorAll(".gj-resit[data-k]").forEach((el) => { if (GJ.edit && GJ.edit.slip_id === id) el.innerHTML = gjResitIsi(el.dataset.k, kunci); });
+  }
+  function gjResitTambah(k) {
+    gjBacaBorang();
+    const e = GJ.edit; if (!e || !e.slip_id) return;
+    const label = (e.item[k] || []).map((x) => String(x.label || "").trim()).filter(Boolean);
+    openForm({ live: true, liveNota: "Rekod sebenar DEV: resit dalam folder Drive app SCE-DEV-RESIT-GAJI, senarai dalam SCE-DEV-PAYROLL. Direkod dalam audit.", title: "+ " + GJ_RESIT_LABEL[k][1] + " · " + e.slip_id, submit: "Muat Naik",
+      intro: note("Gambar (dimampatkan automatik) atau PDF maks 2 MB. Boleh pilih beberapa fail."), fields: [
+        { name: "fail", label: "Fail resit / bukti", type: "file", required: true, full: true },
+        { name: "item_label", label: "Untuk baris", type: "select", full: true, options: [["", "Umum (tiada baris khusus)"]].concat(label.map((x) => [x, x])) },
+        { name: "catatan", label: "Catatan (pilihan)", type: "textarea", full: true, maxlength: 300 }
+      ], onSubmit: async (d) => {
+        const fs2 = inp && inp.files ? [...inp.files] : [];
+        if (!fs2.length) { toast("Sila pilih fail."); return; }
+        toast("Memuat naik " + fs2.length + " fail…");
+        let ok = 0;
+        for (const g of fs2) {
+          try {
+            const asas = { slip_id: e.slip_id, bahagian: k, item_label: d.item_label || "", catatan: d.catatan || "" };
+            if (g.type === "application/pdf" || /\.pdf$/i.test(g.name)) {
+              if (g.size > 2 * 1024 * 1024) { toast(g.name + ": PDF melebihi 2 MB, dilangkau."); continue; }
+              await LIVE.api("payroll.resit.upload", Object.assign(asas, { nama: g.name, mime: "application/pdf", data: await ltBacaBase64(g) }));
+            } else if (/^image\//.test(g.type)) {
+              const penuh = await fotoMampat(g, 1600, 0.82);
+              let thumb = await fotoMampat(g, 320, 0.6); if (thumb.length > 44000) thumb = await fotoMampat(g, 240, 0.5);
+              await LIVE.api("payroll.resit.upload", Object.assign(asas, { nama: g.name.replace(/\.[A-Za-z0-9]+$/, "") + ".jpg", mime: "image/jpeg", data: penuh.split(",")[1], thumb: thumb }));
+            } else { toast(g.name + ": jenis fail tidak disokong, dilangkau."); continue; }
+            ok++;
+          } catch (x) { toast(g.name + ": " + (x.message || "gagal")); }
+        }
+        if (ok) toast(ok + " fail dimuat naik.");
+        GJ.resit = null; gjResitMuat(e.slip_id);
+      } });
+    const inp = modal.querySelector('input[type="file"]');
+    if (inp) { inp.setAttribute("accept", "image/*,application/pdf"); inp.multiple = true; }
+  }
+  async function gjResitLihat(id) {
+    const x = GJ.resit && GJ.resit.list.find((r) => r.resit_id === id);
+    const tajuk = (x && (x.item_label || x.nama)) || id;
+    openInfo({ title: tajuk, body: '<p class="muted" role="status">Memuatkan…</p>' });
+    try {
+      const o = await LIVE.api("payroll.resit.get", { resit_id: id });
+      if (!/^(image\/(jpeg|png|webp)|application\/pdf)$/.test(o.mime) || !/^[A-Za-z0-9+/=]+$/.test(o.data)) throw new Error("Data fail tidak sah.");
+      if (!modal.open) return;
+      if (o.mime === "application/pdf") {
+        const url = URL.createObjectURL(new Blob([Uint8Array.from(atob(o.data), (c) => c.charCodeAt(0))], { type: "application/pdf" }));
+        openInfo({ title: tajuk, body: '<div class="dk-bingkai"><iframe src="' + esc(url) + '" title="' + esc(o.nama) + '"></iframe></div>', actions: '<a class="btn" href="' + esc(url) + '" download="' + esc(o.nama) + '">Muat turun</a> ' });
+        modal.classList.add("modal-slip");
+        setTimeout(() => modal.addEventListener("close", () => { modal.classList.remove("modal-slip"); setTimeout(() => URL.revokeObjectURL(url), 60000); }, { once: true }), 0);
+      } else {
+        openInfo({ title: tajuk, body: '<img class="foto-penuh" src="data:' + o.mime + ";base64," + o.data + '" alt="' + esc(o.nama) + '">' + (x && x.catatan ? '<p class="small muted">' + esc(x.catatan) + "</p>" : "") });
+        modal.classList.add("modal-slip"); setTimeout(() => modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true }), 0);
+      }
+    } catch (e) { openInfo({ title: tajuk, body: note(e.message) }); }
+  }
+  function gjResitBuang(id) {
+    const x = GJ.resit && GJ.resit.list.find((r) => r.resit_id === id); if (!x) return;
+    gjBacaBorang();
+    openForm({ live: true, liveNota: "Rekod sebenar DEV: resit dalam SCE-DEV-PAYROLL. Tindakan ini direkod dalam audit.", title: "Buang resit?", submit: "Ya, buang resit",
+      intro: '<div class="buang-amaran"><span class="buang-ikon" aria-hidden="true">' + icon("trash") + "</span><div><strong>" + esc(x.item_label || "Umum") + '</strong><p class="small">' + esc(x.nama) + "</p></div></div>",
+      fields: [{ name: "sah", label: "Saya pasti mahu membuang resit ini", type: "confirm", required: true }],
+      onSubmit: async () => {
+        try { await LIVE.api("payroll.resit.buang", { resit_id: id }); toast("Resit dibuang."); } catch (e) { toast(e.message); }
+        const sid = GJ.resit.slip_id; GJ.resit = null; gjResitMuat(sid);
+      } });
+    const hantar = modal.querySelector('button[type="submit"]'); if (hantar) { hantar.classList.remove("primary"); hantar.classList.add("btn-bahaya"); }
+  }
+
   async function gjBuka(id) {
     try {
       const o = await LIVE.api("payroll.slip.get", { slip_id: id });
@@ -1924,7 +2036,8 @@
         '<input data-f="amaun" class="gj-amaun" inputmode="decimal" placeholder="0.00" value="' + esc(x.amaun) + '"' + dis + ' aria-label="Amaun (RM)">' +
         (kunci ? "" : '<button type="button" class="icon-btn" data-action="gj-buang" data-k="' + k + '" data-i="' + i + '" aria-label="Buang baris">✕</button>') + "</div>").join("") +
       (kunci ? "" : '<div class="gj-tambah">' + btn("+ Baris", "gj-tambah", "small", ' data-k="' + k + '"') +
-        (k === "bonus" ? (program.length ? '<select class="inline-select" data-gj-program aria-label="Tambah dari program"><option value="">+ Tambah dari program ' + esc(gjBulanLabel(e.bulan)) + "…</option>" + program.map((p) => '<option value="' + esc(p.kunci) + '">' + esc(fmtDate(p.tarikh) + " · " + p.jenis + " · " + p.tetuan) + "</option>").join("") + "</select>" : '<span class="small muted">Tiada program selesai pada ' + esc(gjBulanLabel(e.bulan)) + " dalam rekod.</span>") : "") + "</div>") + "</div>").join("");
+        (k === "bonus" ? (program.length ? '<select class="inline-select" data-gj-program aria-label="Tambah dari program"><option value="">+ Tambah dari program ' + esc(gjBulanLabel(e.bulan)) + "…</option>" + program.map((p) => '<option value="' + esc(p.kunci) + '">' + esc(fmtDate(p.tarikh) + " · " + p.jenis + " · " + p.tetuan) + "</option>").join("") + "</select>" : '<span class="small muted">Tiada program selesai pada ' + esc(gjBulanLabel(e.bulan)) + " dalam rekod.</span>") : "") + "</div>") +
+      (k === "tuntutan" || k === "potongan" ? gjResitHtml(k, e, kunci) : "") + "</div>").join("");
     return pageHead(e.slip_id ? "Slip " + e.slip_id : "Slip Gaji Baharu", kunci ? "Slip ini sudah dimuktamadkan dan dikunci." : "Isi amaun dalam RM. Biarkan kosong untuk paparan '-'.", liveTagDev) +
       '<section class="panel" id="slip-editor">' +
         '<div class="form-grid">' +
@@ -2601,6 +2714,8 @@
     "pj-ubah"(el) { pjBorang(el.dataset.ref); },
     "pj-tugasan"(el) { liveTaskNew(el.dataset.ref); },
     "pj-dokumen"(el) { dkBorang(null, el.dataset.ref); },
+    "pj-laporan"(el) { dkBorang(null, el.dataset.ref, "Laporan"); },
+    "pj-surat"(el) { dkBorang(null, el.dataset.ref, "Surat Jemputan"); },
     "pj-tapis"(el) { const t = el.dataset.tapis; state.filters["pj.status"] = t === "Selesai" ? "Selesai" : "Aktif"; state.filters["pj.jenis"] = t === "Signboard" ? "Signboard" : "Semua"; refresh(); },
     "dk-reload"() { dkReload(); },
     "dk-tambah"() { dkBorang(null); },
@@ -2634,6 +2749,9 @@
     "gj-baru"() { gjBaru(); },
     "gj-buka"(el) { gjBuka(el.dataset.id); },
     "gj-padam-slip"(el) { gjBuang(el.dataset.id); },
+    "gj-resit-tambah"(el) { gjResitTambah(el.dataset.k); },
+    "gj-resit-lihat"(el) { gjResitLihat(el.dataset.id); },
+    "gj-resit-buang"(el) { gjResitBuang(el.dataset.id); },
     "gj-tutup"() { GJ.edit = null; refresh(); },
     "gj-tambah"(el) { gjBacaBorang(); GJ.edit.item[el.dataset.k].push({ label: "", amaun: "" }); refresh(); },
     "gj-buang"(el) { gjBacaBorang(); GJ.edit.item[el.dataset.k].splice(+el.dataset.i, 1); refresh(); },

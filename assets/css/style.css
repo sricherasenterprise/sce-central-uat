@@ -659,3 +659,26 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
 .buang-amaran p { margin: 4px 0 0; }
 .buang-ikon { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--bad); color: #fff; }
 .buang-ikon svg { width: 18px; height: 18px; }
+
+/* Resit / bukti slip gaji (17/11/2026) */
+.gj-resit { margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--r-sm, 6px); background: var(--surface-sunk); }
+.gj-resit-nota { margin-top: 8px; }
+.gj-resit-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 14px; }
+.gj-resit-senarai { display: grid; gap: 8px; margin-top: 8px; }
+.gj-resit-item { display: flex; align-items: center; gap: 10px; padding: 6px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: var(--surface); }
+.gj-resit-muka { flex: none; width: 52px; height: 52px; padding: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--surface-sunk); cursor: zoom-in; display: grid; place-items: center; }
+.gj-resit-muka img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gj-resit-pdf { font-size: 12px; font-weight: 700; color: #B3261E; }
+.gj-resit-info { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.gj-resit-info strong, .gj-resit-info span { overflow-wrap: anywhere; }
+.gj-resit-item .btn-buang svg { width: 16px; height: 16px; }
+
+/* Pintas dokumen projek (17/11/2026) */
+.pj-pintas { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pj-pintas li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); }
+.pj-pintas-info { flex: 1 1 260px; min-width: 0; display: grid; gap: 3px; }
+.pj-pintas-butang { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pj-tanda-baris { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
+.pj-tanda-dok { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
+.pj-tanda-dok.ada { background: #E3F4EA; border-color: #1E8E5A; color: #156B43; }
+.pj-tanda-dok.tiada { color: var(--muted, #667); }
