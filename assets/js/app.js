@@ -1538,7 +1538,7 @@
       return '<article class="dk-kad' + (d.tersembunyi ? " tersembunyi" : "") + '">' +
         '<button type="button" class="dk-muka dk-' + esc((d.jenis || "LINK").toLowerCase()) + '" data-action="dk-lihat" data-id="' + esc(d.doc_id) + '" aria-label="Lihat ' + esc(d.tajuk) + '"><span class="dk-logo">' + esc(j[0]) + '</span><span class="dk-mod">' + (boleh ? "▶ Preview" : "↗ " + esc(j[1])) + "</span></button>" +
         '<div class="dk-isi"><h3 class="dk-tajuk">' + esc(d.tajuk) + "</h3>" +
-          '<p class="small"><span class="badge neutral">' + esc(d.kategori) + "</span>" + (d.akses === "PENGURUSAN" ? ' <span class="badge warn">Pengurusan</span>' : "") + (d.tersembunyi ? ' <span class="badge bad">Tersembunyi</span>' : "") + "</p>" +
+          '<p class="small"><span class="badge neutral">' + esc(d.kategori) + "</span>" + (d.tersembunyi ? ' <span class="badge bad">Tersembunyi</span>' : "") + "</p>" +
           (d.auto ? '<p class="small muted">' + (d.rujukan ? "No. Ruj. " + esc(d.rujukan) : "Quotation muktamad") + "</p>" : '<p class="small muted">' + esc(dkRujTeks(d)) + "</p>") +
           (d.jenis === "PDF" && d.nama_fail ? '<p class="small muted dk-url">' + esc(d.nama_fail) + (d.saiz_bait ? " · " + dkSaiz(d.saiz_bait) : "") + "</p>" : "") +
           '<p class="small muted">' + esc(namaPapar(d.oleh || "")) + " · " + esc(dkTarikh(d.updated_at || d.created_at)) + "</p></div></article>";
@@ -1568,7 +1568,7 @@
       { name: "rujukan", label: "Projek / rujukan", maxlength: 250, value: pjPra ? pjLabel(pjPra) : ada ? d.rujukan : "", help: "Untuk Projek: cari dan klik projek. Untuk pilihan lain: taip rujukan." },
       { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 500, value: ada ? d.catatan : "" }
     ];
-    if (dkUrus()) fields.push({ name: "akses", label: "Siapa boleh lihat", type: "select", options: [["SEMUA", "Semua pengguna SCE CENTRAL"], ["PENGURUSAN", "Pengurusan sahaja (SA / MG + pencipta)"]], value: ada ? d.akses : "SEMUA" });
+    // Keputusan pemilik 17/11/2026: tiada lagi pilihan "Pengurusan sahaja"; semua dokumen aktif dilihat semua pengguna.
     openForm({ live: !dkDemo(), title: ada ? "Ubah " + d.doc_id : "Tambah Dokumen", submit: ada ? "Simpan" : "Tambah", fields: fields,
       intro: dkDemo() ? note("Pratonton sahaja: tiada apa disimpan.") : "",
       onSubmit: async (v) => {
@@ -1627,9 +1627,9 @@
   function dkLihat(id) {
     const d = (DK.list || []).find((x) => x.doc_id === id); if (!d) return;
     if (d.jenis === "QUOTATION") {
-      openInfo({ title: d.tajuk, body: note("Quotation ini telah MUKTAMAD dan disimpan secara automatik dalam Documents. Klik Buka Quotation untuk melihat, mencetak atau memuat turun (Save as PDF).") +
+      openInfo({ title: d.tajuk, body: note(d.bolehBuka === false ? "Quotation ini telah MUKTAMAD. Untuk membuka butiran penuh (harga, cetak), akaun anda perlukan akses Quotation. Hubungi SUPER ADMIN jika perlu." : "Quotation ini telah MUKTAMAD dan disimpan secara automatik dalam Documents. Klik Buka Quotation untuk melihat, mencetak atau memuat turun (Save as PDF).") +
         '<dl class="dk-info"><dt>No. Rujukan</dt><dd>' + esc(d.rujukan || "—") + "</dd><dt>Dimuktamadkan</dt><dd>" + esc(dkTarikh(d.updated_at)) + "</dd></dl>",
-        actions: btn("Buka Quotation", "dk-quo", "primary", ' data-id="' + esc(d.quo_id) + '"') + " " });
+        actions: d.bolehBuka === false ? "" : btn("Buka Quotation", "dk-quo", "primary", ' data-id="' + esc(d.quo_id) + '"') + " " });
       return;
     }
     if (d.jenis === "PDF") { dkLihatPdf(d); return; }
