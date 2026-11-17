@@ -1945,8 +1945,8 @@
     try { const o = await LIVE.api("payroll.slip.save", { slip_id: e.slip_id, version: e.version, data: data }); toast("Slip disimpan."); GJ.slip = null; await gjBuka(o.slip_id); gjLoad(); }
     catch (x) { toast(x.message); }
   }
-  /** Buang slip: DRAF oleh pengguna Slip Gaji; MUKTAMAD hanya SA/MG (server juga menyemak). */
-  const gjBolehBuang = (x) => x && x.slip_id && (x.status !== "MUKTAMAD" || ["SUPER_ADMIN", "MANAGEMENT"].includes(LIVE_USER.role));
+  /** Buang slip: semua pengguna Slip Gaji; MUKTAMAD perlu sebab (server juga menyemak). */
+  const gjBolehBuang = (x) => !!(x && x.slip_id); // Keputusan pemilik 17/11/2026: semua pengguna Slip Gaji (MUKTAMAD perlu sebab)
   const gjButangBuang = (id, berlabel) => '<button type="button" class="btn small btn-buang" data-action="gj-padam-slip" data-id="' + esc(id) + '" aria-label="Buang slip ' + esc(id) + '" title="Buang slip">' + icon("trash") + (berlabel ? "<span>Buang</span>" : "") + "</button>";
   function gjBuang(id) {
     const x = GJ.edit && GJ.edit.slip_id === id ? GJ.edit : (GJ.slip || []).find((r) => r.slip_id === id);
