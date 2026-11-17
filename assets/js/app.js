@@ -292,7 +292,8 @@
     menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
     left: '<path d="m15 5-7 7 7 7"/>',
     right: '<path d="m9 5 7 7-7 7"/>',
-    close: '<path d="M6 6l12 12M18 6 6 18"/>'
+    close: '<path d="M6 6l12 12M18 6 6 18"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'
   };
   ICON.operations = ICON.dbkl || ICON.programs;
   ICON.payroll = ICON.finance;
@@ -1830,7 +1831,7 @@
         { h: "ID", r: (x) => '<span class="tnum">' + esc(x.slip_id) + "</span>" }, { h: "Pekerja", r: (x) => esc(x.nama) }, { h: "Bulan", r: (x) => esc(gjBulanLabel(x.bulan)) },
         { h: "Gaji Kasar", num: true, r: (x) => "RM " + gjRM(x.gaji_kasar_sen) }, { h: "Gaji Bersih", num: true, r: (x) => "<b>RM " + gjRM(x.gaji_bersih_sen) + "</b>" },
         { h: "Status", r: (x) => '<span class="badge ' + (x.status === "MUKTAMAD" ? "good" : "warn") + '">' + esc(x.status === "MUKTAMAD" ? "Muktamad" : "Draf") + "</span>" },
-        { h: "Tindakan", r: (x) => btn("Buka", "gj-buka", "small", ' data-id="' + esc(x.slip_id) + '"') }
+        { h: "Tindakan", r: (x) => '<div class="row-actions">' + btn("Buka", "gj-buka", "small", ' data-id="' + esc(x.slip_id) + '"') + (gjBolehBuang(x) ? gjButangBuang(x.slip_id) : "") + "</div>" }
       ], list, empty(GJ.cfg.pekerja.length ? "Belum ada slip. Klik + Slip Baharu." : "Tambah pekerja dahulu (tab Pekerja).")) + "</section>";
   }
 
@@ -1914,7 +1915,8 @@
           '<p class="small" data-jumlah="amaran" style="color:var(--bad)"' + (t.sah ? " hidden" : "") + ">Ada amaun tidak sah (guna format 1234.50).</p></div>" +
         '<div class="row-actions" style="margin-top:16px">' + btn("← Kembali", "gj-tutup") + (kunci ? "" : btn("Simpan Draf", "gj-simpan", "primary")) +
           (e.slip_id ? btn("Pratonton & Cetak", "gj-cetak") : "") + (e.slip_id && !kunci ? btn("Muktamadkan", "gj-muktamad") : "") +
-          (e.slip_id && kunci && ["SUPER_ADMIN", "MANAGEMENT"].includes(LIVE_USER.role) ? btn("Buka Semula", "gj-bukasemula") : "") + "</div>" +
+          (e.slip_id && kunci && ["SUPER_ADMIN", "MANAGEMENT"].includes(LIVE_USER.role) ? btn("Buka Semula", "gj-bukasemula") : "") +
+          (e.slip_id && gjBolehBuang(e) ? '<span class="row-actions-ruang"></span>' + gjButangBuang(e.slip_id, true) : "") + "</div>" +
       "</section>";
   }
   async function gjSimpan() {
@@ -1922,6 +1924,34 @@
     const data = { pekerja_id: e.pekerja_id, bulan: e.bulan, tempoh_mula: e.tempoh_mula, tempoh_tamat: e.tempoh_tamat, tarikh_gaji: e.tarikh_gaji, item: e.item };
     try { const o = await LIVE.api("payroll.slip.save", { slip_id: e.slip_id, version: e.version, data: data }); toast("Slip disimpan."); GJ.slip = null; await gjBuka(o.slip_id); gjLoad(); }
     catch (x) { toast(x.message); }
+  }
+  /** Buang slip: DRAF oleh pengguna Slip Gaji; MUKTAMAD hanya SA/MG (server juga menyemak). */
+  const gjBolehBuang = (x) => x && x.slip_id && (x.status !== "MUKTAMAD" || ["SUPER_ADMIN", "MANAGEMENT"].includes(LIVE_USER.role));
+  const gjButangBuang = (id, berlabel) => '<button type="button" class="btn small btn-buang" data-action="gj-padam-slip" data-id="' + esc(id) + '" aria-label="Buang slip ' + esc(id) + '" title="Buang slip">' + icon("trash") + (berlabel ? "<span>Buang</span>" : "") + "</button>";
+  function gjBuang(id) {
+    const x = GJ.edit && GJ.edit.slip_id === id ? GJ.edit : (GJ.slip || []).find((r) => r.slip_id === id);
+    if (!x) return;
+    const ringkas = (GJ.slip || []).find((r) => r.slip_id === id) || {};
+    const muktamad = x.status === "MUKTAMAD";
+    const nama = ringkas.nama || (x.pekerja && x.pekerja.nama) || x.pekerja_id || "";
+    openForm({ live: true, liveNota: "Rekod sebenar DEV: Slip Gaji dalam SCE-DEV-PAYROLL. Tindakan ini direkod dalam audit.", title: "Buang slip " + id + "?", submit: "Ya, buang slip",
+      intro: '<div class="buang-amaran"><span class="buang-ikon" aria-hidden="true">' + icon("trash") + "</span><div><strong>" + esc(nama) + " · " + esc(gjBulanLabel(x.bulan)) + "</strong>" +
+        '<p class="small">Gaji bersih RM ' + gjRM(ringkas.gaji_bersih_sen != null ? ringkas.gaji_bersih_sen : x.gaji_bersih_sen) + " · " + (muktamad ? "Muktamad" : "Draf") + "</p>" +
+        '<p class="small">Slip ini akan dibuang dari senarai Slip Gaji. Rekod asal disimpan dalam audit dan boleh dipulihkan oleh SUPER ADMIN jika perlu.</p></div></div>',
+      fields: [
+        { name: "sebab", label: muktamad ? "Sebab (wajib untuk slip muktamad)" : "Sebab (pilihan)", type: "textarea", required: muktamad, full: true, maxlength: 300 },
+        { name: "sah", label: "Saya pasti mahu membuang slip ini", type: "confirm", required: true }
+      ],
+      onSubmit: async (d) => {
+        if (muktamad && String(d.sebab || "").trim().length < 5) { toast("Sebab wajib (min 5 aksara)."); return; }
+        try {
+          await LIVE.api("payroll.slip.buang", { slip_id: id, version: x.version, sebab: d.sebab || "" });
+          toast("Slip " + id + " dibuang.");
+          if (GJ.edit && GJ.edit.slip_id === id) GJ.edit = null;
+          GJ.slip = null; gjLoad(); refresh();
+        } catch (e) { toast(e.message); }
+      } });
+    const hantar = modal.querySelector('button[type="submit"]'); if (hantar) { hantar.classList.remove("primary"); hantar.classList.add("btn-bahaya"); }
   }
   async function gjStatus(ke, sebab) {
     const e = GJ.edit;
@@ -2430,7 +2460,7 @@
       else ctl = '<input id="' + attrs + ' type="' + (fd.type || "text") + '"' + (fd.type === "file" ? "" : ' value="' + esc(fd.value == null ? "" : fd.value) + '"') + ">";
       return '<div class="field' + full + '"><label for="' + id + '">' + esc(fd.label) + (fd.required ? ' <span class="req">*</span>' : "") + "</label>" + ctl + (fd.help ? '<span class="field-help">' + esc(fd.help) + "</span>" : "") + '<span class="field-err" hidden></span></div>';
     }).join("");
-    modal.innerHTML = "<form novalidate>" + modalHead(cfg.title) + '<div class="modal-body">' + (cfg.intro || "") + (cfg.live ? note("Rekod sebenar DEV: disimpan dalam SCE-DEV-TASKS dan direkod dalam audit.") : note("Data contoh. Rekod disimpan dalam sesi tab ini sahaja.")) + '<div class="form-grid">' + fields + '</div></div><div class="modal-foot"><button type="button" class="btn" data-action="close-modal">Batal</button><button type="submit" class="btn primary">' + esc(cfg.submit || "Simpan") + "</button></div></form>";
+    modal.innerHTML = "<form novalidate>" + modalHead(cfg.title) + '<div class="modal-body">' + (cfg.intro || "") + (cfg.live ? note(cfg.liveNota || "Rekod sebenar DEV: disimpan dalam SCE-DEV-TASKS dan direkod dalam audit.") : note("Data contoh. Rekod disimpan dalam sesi tab ini sahaja.")) + '<div class="form-grid">' + fields + '</div></div><div class="modal-foot"><button type="button" class="btn" data-action="close-modal">Batal</button><button type="submit" class="btn primary">' + esc(cfg.submit || "Simpan") + "</button></div></form>";
     const form = modal.querySelector("form");
     form.addEventListener("submit", (ev) => {
       ev.preventDefault();
@@ -2583,6 +2613,7 @@
     "gj-pekerja"(el) { gjPekerjaForm(el.dataset.id || ""); },
     "gj-baru"() { gjBaru(); },
     "gj-buka"(el) { gjBuka(el.dataset.id); },
+    "gj-padam-slip"(el) { gjBuang(el.dataset.id); },
     "gj-tutup"() { GJ.edit = null; refresh(); },
     "gj-tambah"(el) { gjBacaBorang(); GJ.edit.item[el.dataset.k].push({ label: "", amaun: "" }); refresh(); },
     "gj-buang"(el) { gjBacaBorang(); GJ.edit.item[el.dataset.k].splice(+el.dataset.i, 1); refresh(); },

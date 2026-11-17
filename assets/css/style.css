@@ -647,3 +647,15 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
 .pj-pilih-nama { font-weight: 600; overflow-wrap: anywhere; }
 .pj-pilih-info { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pj-pilih-tanda { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #1E8E5A; color: #fff; font-weight: 700; }
+
+/* Buang rekod (17/11/2026) */
+.btn-buang { display: inline-flex; align-items: center; gap: 6px; color: var(--bad); border-color: var(--bad-tint); }
+.btn-buang svg { width: 16px; height: 16px; }
+.btn-buang:hover, .btn-buang:focus-visible { background: var(--bad-tint); border-color: var(--bad); color: var(--bad); }
+.row-actions-ruang { flex: 1; }
+.btn-bahaya { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn-bahaya:hover, .btn-bahaya:focus-visible { filter: brightness(.92); color: #fff; }
+.buang-amaran { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--bad-tint); border-left: 4px solid var(--bad); border-radius: var(--r-sm, 6px); background: var(--bad-tint); color: var(--text); margin-bottom: 12px; }
+.buang-amaran p { margin: 4px 0 0; }
+.buang-ikon { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--bad); color: #fff; }
+.buang-ikon svg { width: 18px; height: 18px; }
