@@ -682,3 +682,9 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
 .pj-tanda-dok { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); }
 .pj-tanda-dok.ada { background: #E3F4EA; border-color: #1E8E5A; color: #156B43; }
 .pj-tanda-dok.tiada { color: var(--muted, #667); }
+
+/* Tahap program boleh ditekan (17/11/2026) */
+.pj-tahap-btn { display: inline-flex; align-items: center; gap: 8px; padding: 3px 8px 3px 3px; margin: -3px 0; font: inherit; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 8px; cursor: pointer; }
+.pj-tahap-btn:hover, .pj-tahap-btn:focus-visible { border-color: var(--accent, #33C2B8); background: var(--surface-sunk); outline: none; }
+.pj-tahap-btn:disabled { opacity: .6; cursor: progress; }
+.pj-langkah li .small.muted { margin-left: 4px; }

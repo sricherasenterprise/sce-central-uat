@@ -1264,7 +1264,7 @@
     if (PJ.busy || !LIVE_USER) return;
     PJ.busy = true;
     LIVE.api("projects.meta")
-      .then((o) => { PJ.meta = o.meta || []; PJ.bolehUrus = !!o.bolehUrus; PJ.pm = o.pm || []; PJ.tiada = false; PJ.err = null; })
+      .then((o) => { PJ.meta = o.meta || []; PJ.tahap = o.tahap || {}; PJ.bolehTanda = !!o.bolehTandaTahap; PJ.bolehUrus = !!o.bolehUrus; PJ.pm = o.pm || []; PJ.tiada = false; PJ.err = null; })
       .catch((e) => { PJ.meta = []; if (e.code === "TINDAKAN_TAK_SAH") PJ.tiada = true; else PJ.err = e.message; })
       .finally(() => { PJ.busy = false; if (currentRoute() === "projects") refresh(); });
   }
@@ -1283,10 +1283,14 @@
     (LD.program || []).forEach((p) => {
       const asas = asasPrg(p);
       const ref = unik(kiraAsas[asas] > 1 && p.tarikh ? asas.slice(0, 50) + "-" + String(p.tarikh).replace(/-/g, "") : asas);
-      const tahap = [p.tahap.event, p.tahap.report, p.tahap.submission];
-      const st = { Selesai: "SELESAI", Batal: "BATAL", Ditangguh: "DITANGGUH", "Akan datang": "BARU", "Tarikh belum tetap": "BARU" }[p.kategori] || "BERJALAN";
+      // Tahap berkesan: tanda dalam SCE CENTRAL (DEV) mengatasi Sheet; "na" dari Sheet kekal N/A
+      const ov = (PJ.tahap || {})[ref] || {};
+      const tahapEff = {}; ["event", "report", "submission"].forEach((t) => { tahapEff[t] = p.tahap[t] === "na" ? "na" : ov[t] ? (ov[t].siap ? "siap" : "belum") : p.tahap[t]; });
+      const perlu = ["event", "report", "submission"].filter((t) => tahapEff[t] !== "na"), siap = perlu.filter((t) => tahapEff[t] === "siap").length;
+      let st = { Selesai: "SELESAI", Batal: "BATAL", Ditangguh: "DITANGGUH", "Akan datang": "BARU", "Tarikh belum tetap": "BARU" }[p.kategori] || "BERJALAN";
+      if (perlu.length && siap === perlu.length && st !== "BATAL") st = "SELESAI";
       out.push({ ref, sumber: "AUTO", asal: "program", src: p, jenis: PJ_JENIS[p.jenis] ? p.jenis : "LAIN-LAIN", nama: p.tetuan, rujukan: p.noFail, lokasi: p.lokasi, tarikh: pjTarikhIso(p.tarikh), statusSheet: st, nota: p.kategori,
-        kemajuan: st === "SELESAI" ? 100 : pct(tahap.filter((x) => x === "siap").length, 3), pmAsal: "" });
+        kemajuan: st === "SELESAI" ? 100 : pct(siap, perlu.length || 3), pmAsal: "", tahapEff, tahapOv: ov });
     });
     (LD.order || []).forEach((o) => {
       const ref = unik("ORD-" + pjSlug(o.id));
@@ -1421,8 +1425,20 @@
     if (!DK.list && !DK.err) dkLoad();
     let langkah = "";
     if (p.asal === "order") langkah = '<p class="sub-head" style="margin-top:16px">Checklist DBKL (' + s.siap + "/" + s.perlu + ')</p><ol class="pj-langkah">' + s.langkah.map((l) => '<li class="' + l.status + '"><span class="pj-tanda">' + (l.status === "siap" ? "✓" : l.status === "na" ? "N/A" : "") + "</span>" + esc(l.nama) + (l.tarikh ? ' <span class="small muted">' + esc(l.tarikh) + "</span>" : "") + "</li>").join("") + "</ol>";
-    if (p.asal === "program") langkah = '<p class="sub-head" style="margin-top:16px">Tahap program</p><ol class="pj-langkah">' + [["Event", s.tahap.event], ["Report", s.tahap.report], ["Submission", s.tahap.submission]].map(([n, v]) => '<li class="' + (v === "siap" ? "siap" : "belum") + '"><span class="pj-tanda">' + (v === "siap" ? "✓" : "") + "</span>" + n + "</li>").join("") + "</ol>" +
+    if (p.asal === "program") {
+      const boleh = PJ.bolehTanda && !PJ.tiada;
+      langkah = '<p class="sub-head" style="margin-top:16px">Tahap program</p><ol class="pj-langkah">' + [["event", "Event"], ["report", "Report"], ["submission", "Submission"]].map(([t, n]) => {
+        const v = p.tahapEff[t], o = p.tahapOv[t], sheet = s.tahap[t];
+        // Klik seterusnya: nilai sama dengan Sheet → kembali ikut Sheet (null); jika tidak → ganti (true / false)
+        const seterusnya = v === "siap" ? (sheet === "siap" ? "0" : "null") : (sheet === "siap" ? "null" : "1");
+        const asal = o ? "Ditanda dalam SCE CENTRAL oleh " + namaPapar(o.oleh || "") + " · " + dkTarikh(o.pada) : v === "siap" ? "Dari rekod Sheet" : "";
+        if (v === "na") return '<li class="na"><span class="pj-tanda">N/A</span>' + n + "</li>";
+        const tanda = '<span class="pj-tanda">' + (v === "siap" ? "✓" : "") + "</span>";
+        return '<li class="' + (v === "siap" ? "siap" : "belum") + '">' + (boleh ? '<button type="button" class="pj-tahap-btn" data-action="pj-tahap" data-ref="' + esc(p.ref) + '" data-t="' + t + '" data-siap="' + seterusnya + '" aria-pressed="' + (v === "siap") + '" title="' + (v === "siap" ? "Klik untuk nyahtanda" : "Klik untuk tanda selesai") + '">' + tanda + n + "</button>" : tanda + n) +
+          (asal ? ' <span class="small muted">' + esc(asal) + "</span>" : "") + "</li>";
+      }).join("") + "</ol>" + (boleh ? '<p class="small muted">Klik untuk tanda / nyahtanda. Disimpan dalam SCE CENTRAL sahaja. Sheet produksi tidak berubah, jadi kemas kini dashboard legacy juga sehingga migrasi penuh.</p>' : "") +
       (s.linkReport && /^https?:\/\//i.test(s.linkReport) ? '<p class="small"><a href="' + esc(s.linkReport) + '" target="_blank" rel="noopener noreferrer">Buka laporan ↗</a></p>' : "");
+    }
     const tugasan = '<p class="sub-head pj-sub" style="margin-top:16px"><span>Tugasan (' + p.tugasan.length + ")</span>" + (bolehTugas ? btn("+ Tugasan", "pj-tugasan", "small", ' data-ref="' + esc(p.ref) + '"') : "") + "</p>" +
       (p.tugasan.length ? '<ul class="live-list">' + p.tugasan.map((t) => '<li><button type="button" class="text-link tnum" data-action="lt-open" data-id="' + esc(t.task_id) + '">' + esc(t.task_id) + "</button><span>" + esc(t.title) + " · " + ltBadge(t) + '</span><span class="muted small">' + (t.due_date ? "Tarikh akhir " + esc(isoKeHbt(t.due_date)) : "") + "</span></li>").join("") + "</ul>" : '<p class="small muted">' + (LD.tasks ? "Belum ada tugasan untuk projek ini." : "Memuatkan tugasan…") + "</p>");
     const dokumen = '<p class="sub-head pj-sub" style="margin-top:16px"><span>Dokumen (' + p.dokumen.length + ")</span><span class=\"pj-pintas-butang\">" + (p.asal === "program" ? pjButangDok(p) : "") + (DK.bolehTambah ? btn("+ Dokumen", "pj-dokumen", "small", ' data-ref="' + esc(p.ref) + '"') : "") + "</span></p>" +
@@ -1487,7 +1503,7 @@
           const o = await LIVE.api("projects.save", Object.assign({ sumber: auto ? "AUTO" : "MANUAL", project_id: p ? p.ref : "" }, v));
           toast(p ? "Disimpan." : "Projek dicipta: " + o.project_id);
           PJ.meta = null; PJ.busy = false;
-          await LIVE.api("projects.meta").then((x) => { PJ.meta = x.meta || []; PJ.bolehUrus = !!x.bolehUrus; PJ.pm = x.pm || []; });
+          await LIVE.api("projects.meta").then((x) => { PJ.meta = x.meta || []; PJ.tahap = x.tahap || {}; PJ.bolehTanda = !!x.bolehTandaTahap; PJ.bolehUrus = !!x.bolehUrus; PJ.pm = x.pm || []; });
           refresh(); pjBuka(o.project_id);
         } catch (e) { toast(e.message); }
       } });
@@ -2714,6 +2730,17 @@
     "pj-ubah"(el) { pjBorang(el.dataset.ref); },
     "pj-tugasan"(el) { liveTaskNew(el.dataset.ref); },
     "pj-dokumen"(el) { dkBorang(null, el.dataset.ref); },
+    async "pj-tahap"(el) {
+      const ref = el.dataset.ref, t = el.dataset.t, siap = el.dataset.siap === "null" ? null : el.dataset.siap === "1", jadiSiap = el.getAttribute("aria-pressed") !== "true";
+      el.disabled = true;
+      try {
+        const o = await LIVE.api("projects.tahap", { project_id: ref, tahap: t, siap: siap });
+        PJ.tahap = PJ.tahap || {}; PJ.tahap[ref] = PJ.tahap[ref] || {};
+        if (siap === null) delete PJ.tahap[ref][t]; else PJ.tahap[ref][t] = { siap: siap, oleh: LIVE_USER.nama || LIVE_USER.emel, pada: o.pada };
+        toast((jadiSiap ? "Ditanda selesai: " : "Dinyahtanda: ") + t.charAt(0).toUpperCase() + t.slice(1));
+      } catch (e) { toast(e.message); }
+      refresh(); pjBuka(ref);
+    },
     "pj-laporan"(el) { dkBorang(null, el.dataset.ref, "Laporan"); },
     "pj-surat"(el) { dkBorang(null, el.dataset.ref, "Surat Jemputan"); },
     "pj-tapis"(el) { const t = el.dataset.tapis; state.filters["pj.status"] = t === "Selesai" ? "Selesai" : "Aktif"; state.filters["pj.jenis"] = t === "Signboard" ? "Signboard" : "Semua"; refresh(); },
