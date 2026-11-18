@@ -234,7 +234,7 @@
   const LIVE_TIADA_CAP = ["finance.", "dbkl.", "program."]; // kewangan ditangguh; Program dan DBKL kini data sebenar baca sahaja
   const can = (cap) => POLICY.caps.includes(cap) && !(LIVE_USER && LIVE_TIADA_CAP.some((p) => cap.indexOf(p) === 0));
   Object.keys(PERMISSIONS).forEach((k) => { const r = PERMISSIONS[k].routes; if ((r.includes("programs") || r.includes("dbkl")) && !r.includes("operations")) r.push("operations"); });
-  const canRoute = (r) => (r === "payroll" ? !!(LIVE_USER && LIVE_USER.payroll) : r === "quotation" ? !!(LIVE_USER && LIVE_USER.quotation) : POLICY.routes.includes(r) && !(LIVE_USER && r === "finance"));
+  const canRoute = (r) => (r === "rujukan" ? !!(LIVE_USER && LIVE_USER.role !== "VIEWER") : r === "payroll" ? !!(LIVE_USER && LIVE_USER.payroll) : r === "quotation" ? !!(LIVE_USER && LIVE_USER.quotation) : POLICY.routes.includes(r) && !(LIVE_USER && r === "finance"));
   const me = SESSION.name;
   let F = null; // data kewangan: kekal null bagi role tanpa finance.view
 
@@ -298,6 +298,7 @@
   ICON.operations = ICON.dbkl || ICON.programs;
   ICON.payroll = ICON.finance;
   ICON.quotation = ICON.documents;
+  ICON.rujukan = '<path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/>';
   const icon = (n) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + "</svg>";
 
   function panelHead(title, sub, action, tag) {
@@ -848,6 +849,7 @@
     const opt = p.map((u) => [u.emel, u.nama + " (" + LIVE.roleLabel(u.role) + ")"]);
     openForm({ live: true, title: "Tugasan Baharu", submit: "Cipta Tugasan", intro: note("Penyemak tidak boleh menjadi assignee. Assignee utama perlu menerima tugasan sebelum mula."), fields: [
       { name: "projek", label: "Projek (pilihan)", full: true, maxlength: 250, value: pj ? pjLabel(pj) : "", help: "Pilihan. Cari dan klik projek untuk tugasan ini; biarkan kosong jika tiada." },
+      { name: "no_rujukan", label: "No. Rujukan SCE (pilihan)", full: true, maxlength: 60, value: pj && pj.rujukanSce && pj.rujukanSce.length === 1 ? pj.rujukanSce[0].no_rujukan : "" },
       { name: "category", label: "Kategori tugasan", type: "select", required: true, full: true, value: pj ? PJ_KAT_TUGASAN[pj.jenis] || "Lain-lain" : "", options: [["", "Pilih kategori…"], "Signboard Kaedah 3A", "Signboard Kaedah 3B", "Communication Strategy", "Sesi Libat Urus (SLU)", "Lain-lain"] },
       { name: "title", label: "Tajuk", required: true, maxlength: 200, full: true },
       { name: "description", label: "Keterangan", type: "textarea", full: true, maxlength: 2000 },
@@ -865,7 +867,9 @@
     } });
     const fm = modal.querySelector("form"), pjEl = fm.querySelector("[name=projek]"), katEl = fm.querySelector("[name=category]");
     pjPemilih(pjEl);
-    pjEl.addEventListener("change", () => { const x = pjCari(pjRefDariTeks(pjEl.value)); if (x && PJ_KAT_TUGASAN[x.jenis]) katEl.value = PJ_KAT_TUGASAN[x.jenis]; });
+    const rjEl = fm.querySelector("[name=no_rujukan]");
+    const rjP = rjPemilih(rjEl, () => { const x = pjCari(pjRefDariTeks(pjEl.value)); return { tetuan: x ? x.nama : "", no_fail: x && x.src ? x.src.noFail || "" : "", perkara: fm.querySelector("[name=title]").value, tarikh: TODAY, project_id: x ? x.ref : "", siri: x ? rjSiriProjek(x) : "CS" }; });
+    pjEl.addEventListener("change", () => { const x = pjCari(pjRefDariTeks(pjEl.value)); if (x && PJ_KAT_TUGASAN[x.jenis]) katEl.value = PJ_KAT_TUGASAN[x.jenis]; if (x && !rjEl.value && x.rujukanSce && x.rujukanSce.length === 1) { rjEl.value = x.rujukanSce[0].no_rujukan; rjP.render(); } });
   }
   async function liveTaskOpen(id) {
     openInfo({ title: id, body: '<p class="muted" role="status">Memuatkan butiran…</p>' });
@@ -880,7 +884,7 @@
       ["Pemberi tugas", esc(t.nama.assigned_by)], ["Penyemak", esc(t.nama.reviewer)], ["Tarikh akhir", t.due_date ? dueText(t.due_date, ["COMPLETED", "CANCELLED"].includes(t.status)) : "—"],
       ["Projek", (t.project_id ? (() => { const x = pjCari(t.project_id); return '<button type="button" class="text-link" id="lt-pj-nama" data-action="pj-buka" data-ref="' + esc(t.project_id) + '">' + esc(x ? x.nama : t.project_id) + "</button>"; })() : "—") +
         (["SUPER_ADMIN", "MANAGEMENT"].includes(LIVE_USER.role) || t.assigned_by === LIVE_USER.emel ? " " + btn(t.project_id ? "Tukar" : "Pautkan ke projek", "lt-projek", "small", ' data-id="' + esc(t.task_id) + '"') : "")],
-      ["Kategori", esc(t.category || "—")], ["Keterangan", esc(t.description || "—")], ["Sebab tolak", esc(t.reject_reason || "—")]
+      ["No. Rujukan SCE", t.no_rujukan ? '<span class="tnum">' + esc(t.no_rujukan) + "</span>" : "—"], ["Kategori", esc(t.category || "—")], ["Keterangan", esc(t.description || "—")], ["Sebab tolak", esc(t.reject_reason || "—")]
     ]) + (t.project_id ? '<p class="sub-head pj-sub" style="margin-top:16px"><span>Dokumen projek</span><span id="dk-tugasan-butang"></span></p><div id="dk-tugasan" data-ref="' + esc(t.project_id) + '"><p class="small muted" role="status">Memuatkan dokumen projek…</p></div>' : "") +
       '<p class="sub-head" style="margin-top:16px">Lampiran / Bukti</p><div id="lampiran-tugasan" data-task="' + esc(t.task_id) + '"><p class="small muted" role="status">Memuatkan lampiran…</p></div>' +
       '<p class="sub-head" style="margin-top:16px">Sejarah</p>' + timeline(sej, "Tiada sejarah.") });
@@ -1309,7 +1313,8 @@
       p.tugasan = tugasan.filter((t) => t.project_id === p.ref);
       p.dokumen = dok.filter((d) => d.rujukan_jenis === "PROJEK" && d.rujukan === p.ref);
       if (p.kemajuan === null) { const aktif = p.tugasan.filter((t) => t.status !== "CANCELLED"); p.kemajuan = p.status === "SELESAI" ? 100 : pct(aktif.filter((t) => t.status === "COMPLETED").length, aktif.length); }
-      p.cari = [p.nama, p.pelanggan, p.rujukan, p.lokasi, p.ref, p.pm, PJ_JENIS[p.jenis], p.nota].join(" ").toLowerCase();
+      p.rujukanSce = RJ.list ? rjUntukProjek(p) : [];
+      p.cari = [p.nama, p.pelanggan, p.rujukan, p.lokasi, p.ref, p.pm, PJ_JENIS[p.jenis], p.nota, rjTeks(p.rujukanSce)].join(" ").toLowerCase();
     });
     return out;
   }
@@ -1388,6 +1393,7 @@
     if (!LD.tasks && !LD.err.tasks && LIVE_USER.role !== "VIEWER") liveLoad("tasks");
     if (!DK.list && !DK.err) dkLoad();
     if (PJ.meta === null) pjLoad();
+    if (!RJ.list && !RJ.busy) rjLoad();
     ["pj.status:Aktif", "pj.jenis:Semua", "pj.susun:baru"].forEach((x) => { const [k, v] = x.split(":"); if (!f(k)) state.filters[k] = v; });
     const semua = pjSemua(), st = f("pj.status"), jn = f("pj.jenis"), kata = f("pj.q").toLowerCase().split(/\s+/).filter(Boolean);
     const aktif = (p) => !["SELESAI", "BATAL"].includes(p.status);
@@ -1405,7 +1411,7 @@
       '<div class="toolbar pj-cari">' + searchBox("pj.q", "Cari tetuan, no. fail, ID order, lokasi, PM…") + filterSelect("pj.susun", "Susun", [["baru", "Terbaru"], ["sasaran", "Tarikh sasaran"], ["nama", "Nama A–Z"]]) + "</div>" +
       '<div class="toolbar">' + chips("pj.status", ["Aktif", "Selesai", "Semua"]) + '<span class="chips-sep" aria-hidden="true"></span>' + chips("pj.jenis", ["Semua", "Comm. Strategy", "SLU", "SLU Parlimen", "Signboard", "Lain-lain"]) + "</div>" +
       table([
-        { h: "Projek", r: (p) => '<button type="button" class="text-link pj-nama" data-action="pj-buka" data-ref="' + esc(p.ref) + '">' + esc(p.nama) + '</button><br><span class="small muted">' + esc(p.rujukan || (p.asal === "program" ? "Tiada No. Fail" : p.ref)) + "</span>" },
+        { h: "Projek", r: (p) => '<button type="button" class="text-link pj-nama" data-action="pj-buka" data-ref="' + esc(p.ref) + '">' + esc(p.nama) + '</button><br><span class="small muted">' + (p.rujukanSce.length ? '<b class="tnum">' + esc(rjTeks(p.rujukanSce)) + "</b> · " : "") + esc(p.rujukan || (p.asal === "program" ? "Tiada No. Fail" : p.ref)) + "</span>" },
         { h: "Jenis", r: (p) => '<span class="badge neutral">' + esc(PJ_JENIS[p.jenis] || p.jenis) + "</span>" },
         { h: "Tarikh", r: (p) => '<span class="tnum">' + esc(isoKeHbt(p.tarikh) || "—") + "</span>" },
         { h: "PM", r: (p) => esc(p.pm ? namaPapar(p.pm) : "—") },
@@ -1450,6 +1456,8 @@
       ["Status", pjBadge(p.status) + (p.nota ? ' <span class="small muted">' + esc(p.nota) + "</span>" : "")], ["Kemajuan", progress(p.kemajuan || 0, p.status === "SELESAI" ? "good" : "")],
       ["Jenis", esc(PJ_JENIS[p.jenis] || p.jenis)], ["Rujukan", esc(p.rujukan || "—")], ["Pelanggan", esc(p.pelanggan || (p.asal !== "manual" ? p.nama : "") || "—")], ["Lokasi", esc(p.lokasi || "—")],
       ["Tarikh", esc(isoKeHbt(p.tarikh) || "—")], ["PM", esc(p.pm ? namaPapar(p.pm) : "—")], ["Tarikh sasaran", esc(isoKeHbt(p.sasaran) || "—")], ["Catatan", p.catatan ? esc(p.catatan).replace(/\n/g, "<br>") : "—"],
+      ["No. Rujukan SCE", (p.rujukanSce.length ? p.rujukanSce.map((r) => '<button type="button" class="text-link tnum" data-action="rj-buka" data-id="' + esc(r.ruj_id) + '">' + esc(r.no_rujukan) + "</button>").join(", ") : '<span class="muted">—</span>') +
+        (RJ.bolehJana && !RJ.err ? " " + btn("+ Jana", "pj-ruj", "small", ' data-ref="' + esc(p.ref) + '"') : "")],
       ["ID projek", '<span class="tnum small">' + esc(p.ref) + "</span>"]
     ]) + langkah + tugasan + dokumen });
     modal.classList.add("modal-slip"); setTimeout(() => modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true }), 0);
@@ -1507,6 +1515,198 @@
           refresh(); pjBuka(o.project_id);
         } catch (e) { toast(e.message); }
       } });
+  }
+
+  /* ========== No. Rujukan SCE (daftar running number, 18/11/2026) ========== */
+  /* Rekod diimport dari fail "Running Number - Sri Cheras Enterprise"; nombor baharu dijana oleh SCE CENTRAL (rujukan.jana). */
+  const RJ = { list: null, bolehJana: false, bolehUbah: false, err: null, busy: false };
+  const RJ_SIRI = { CS: "Comm. Strategy (BIL./CS)", LU: "SLU (BIL./LU)", SURAT: "Surat (L-0000)", R3B: "Kaedah 3B (SCE/R3B)", INV: "Invois" };
+  const RJ_SIRI_PENDEK = { CS: "CS", LU: "SLU", SURAT: "Surat", R3B: "Kaedah 3B", INV: "Invois" };
+  const rjNormalFail = (v) => { const s = String(v || "").toUpperCase().replace(/\s+/g, "").replace(/[.]/g, ""); return /\*/.test(s) || !/\d/.test(s) ? "" : s; };
+  function rjLoad() {
+    if (RJ.busy || !LIVE_USER || LIVE_USER.role === "VIEWER") return;
+    RJ.busy = true;
+    LIVE.api("rujukan.list")
+      .then((o) => { RJ.list = o.rujukan || []; RJ.bolehJana = !!o.bolehJana; RJ.bolehUbah = !!o.bolehUbah; RJ.err = null; })
+      .catch((e) => { RJ.list = RJ.list || []; RJ.err = e.code === "TINDAKAN_TAK_SAH" ? "Daftar No. Rujukan belum aktif (backend belum dikemas kini)." : e.message; })
+      .finally(() => { RJ.busy = false; if (["rujukan", "projects"].includes(currentRoute())) refresh(); });
+  }
+  function rjReload() { RJ.list = null; rjLoad(); refresh(); }
+  /** Rekod rujukan bagi projek: dipaut terus (project_id) atau padanan No. Fail (program CS ↔ Comstra, LU ↔ SLU). */
+  function rjUntukProjek(p) {
+    const semua = RJ.list || [];
+    const terus = semua.filter((r) => r.project_id === p.ref);
+    if (p.asal !== "program") return terus;
+    const nf = rjNormalFail(p.src && p.src.noFail), siri = p.jenis === "COMSTRA" ? "CS" : "LU";
+    // Padanan: No. Fail sah; jika tiada / tiada padanan → nama tetuan (tanpa "TETUAN", tanda baca). Lebih satu → tapis ikut tarikh.
+    const nama = (v) => String(v || "").toUpperCase().replace(/^TETUAN\s+/, "").replace(/[^A-Z0-9]+/g, "");
+    let cocok = nf ? semua.filter((r) => !r.project_id && r.siri === siri && rjNormalFail(r.no_fail) === nf) : [];
+    if (!cocok.length) cocok = semua.filter((r) => !r.project_id && r.siri === siri && nama(r.tetuan) && nama(r.tetuan) === nama(p.nama));
+    if (cocok.length > 1 && p.tarikh) { const t = cocok.filter((r) => r.tarikh === p.tarikh); if (t.length) cocok = t; }
+    return terus.concat(cocok.filter((r) => !terus.includes(r)));
+  }
+  const rjSiriProjek = (p) => (p.jenis === "COMSTRA" ? "CS" : /SLU/.test(p.jenis) ? "LU" : p.jenis === "SIGNBOARD 3B" ? "R3B" : "SURAT");
+  const rjTeks = (senarai) => senarai.map((r) => r.no_rujukan).join(", ");
+  const rjBendera = (r) => (r.bendera || "").split(",").filter(Boolean).map((b) => '<span class="badge ' + (b === "BERTINDIH" ? "bad" : "warn") + '">' + (b === "BERTINDIH" ? "Bertindih – perlu semak" : "Format luar biasa") + "</span>").join(" ");
+  /** Pratonton nombor seterusnya (sama logik dengan rujukanSeterusnya_ di backend; nombor muktamad diberi oleh server). */
+  function rjSeterusnya(siri, o) {
+    const aktif = (RJ.list || []).filter((r) => r.siri === siri), tahun = String(o.tahun || TODAY.slice(0, 4));
+    const maks = (arr) => arr.reduce((a, r) => Math.max(a, Number(r.nombor) || 0), 0);
+    if (siri === "CS" || siri === "LU") return "BIL." + (maks(aktif.filter((r) => String(r.tahun) === tahun)) + 1) + "/" + siri + "/" + tahun;
+    if (siri === "SURAT") { const k = String(o.kod_tengah || "").toUpperCase().replace(/\s+/g, ""); return k ? "SCE/" + k + "/L-" + String(maks(aktif) + 1).padStart(4, "0") : "SCE/<kod>/L-" + String(maks(aktif) + 1).padStart(4, "0"); }
+    if (siri === "R3B") { const k = String(o.kod || "").toUpperCase().replace(/[^A-Z]/g, ""), m = /^(\d{4})-(\d{2})/.exec(o.tarikh || TODAY); const aw = "SCE/R3B/" + m[2] + "/" + m[1].slice(2) + "/" + (k || "<KOD>"); return aw + String(maks(aktif.filter((r) => String(r.no_rujukan).toUpperCase().indexOf(aw) === 0)) + 1).padStart(2, "0"); }
+    return "";
+  }
+
+  /**
+   * Pemilih No. Rujukan SCE dalam borang: cari nombor sedia ada atau jana nombor baharu tanpa meninggalkan borang.
+   * `input` (disorok) menyimpan teks No. Rujukan. `konteks()` → { tetuan, no_fail, perkara, tarikh, project_id, siri }.
+   */
+  function rjPemilih(input, konteks) {
+    if (!RJ.list && !RJ.busy) rjLoad();
+    const wrap = document.createElement("div"); wrap.className = "pj-pilih rj-pilih";
+    wrap.innerHTML = '<div class="pj-pilih-terpilih"></div><input type="search" class="pj-pilih-cari" placeholder="Cari No. Rujukan, tetuan atau No. Fail…" autocomplete="off" aria-label="Cari No. Rujukan SCE"><div class="pj-pilih-senarai" role="list"></div>' +
+      '<div class="rj-jana" hidden><div class="rj-jana-baris"><select class="inline-select" data-rj="siri" aria-label="Siri"><option value="CS">Comm. Strategy (BIL./CS)</option><option value="LU">SLU (BIL./LU)</option><option value="SURAT">Surat (L-0000)</option><option value="R3B">Kaedah 3B (SCE/R3B)</option></select>' +
+      '<input data-rj="kod_tengah" placeholder="Kod tengah, cth AIA/ET" maxlength="20" hidden><input data-rj="kod" placeholder="Kod pelanggan, cth TTII" maxlength="10" hidden></div><p class="small rj-pratonton"></p><div class="rj-jana-baris">' +
+      '<button type="button" class="btn small primary" data-rj="jana">Jana nombor ini</button><button type="button" class="btn small" data-rj="batal">Batal</button></div></div>';
+    const terpilih = wrap.querySelector(".pj-pilih-terpilih"), cari = wrap.querySelector(".pj-pilih-cari"), senarai = wrap.querySelector(".pj-pilih-senarai"), jana = wrap.querySelector(".rj-jana");
+    const q = (k) => wrap.querySelector('[data-rj="' + k + '"]');
+    input.hidden = true; input.insertAdjacentElement("afterend", wrap);
+    const kad = (r) => '<span class="pj-pilih-nama tnum">' + esc(r.no_rujukan) + '</span><span class="pj-pilih-info"><span class="badge neutral">' + esc(RJ_SIRI_PENDEK[r.siri] || r.siri) + "</span> " + rjBendera(r) +
+      ' <span class="small muted">' + esc((r.tetuan || r.perkara || "").slice(0, 60)) + (r.tarikh ? " · " + esc(isoKeHbt(r.tarikh)) : "") + "</span></span>";
+    function render() {
+      const no = input.value.trim();
+      if (no) {
+        const r = (RJ.list || []).find((x) => x.no_rujukan === no);
+        terpilih.innerHTML = '<div class="pj-pilih-kad dipilih"><span class="pj-pilih-tanda" aria-hidden="true">✓</span><span class="pj-pilih-isi">' + (r ? kad(r) : '<span class="pj-pilih-nama tnum">' + esc(no) + "</span>") + '</span><button type="button" class="btn small" data-rj="tukar">Tukar</button></div>';
+        cari.hidden = senarai.hidden = true; jana.hidden = true; return;
+      }
+      terpilih.innerHTML = ""; cari.hidden = false; senarai.hidden = !jana.hidden;
+      if (!RJ.list) { senarai.innerHTML = '<p class="small muted" role="status">' + (RJ.err ? esc(RJ.err) : "Memuatkan No. Rujukan…") + "</p>"; return; }
+      const k = konteks ? konteks() : {}, nf = rjNormalFail(k.no_fail), kata = cari.value.toLowerCase().split(/\s+/).filter(Boolean);
+      const skor = (r) => (k.project_id && r.project_id === k.project_id ? 3 : 0) + (nf && rjNormalFail(r.no_fail) === nf ? 2 : 0);
+      const list = RJ.list.filter((r) => kata.every((w) => [r.no_rujukan, r.tetuan, r.no_fail, r.perkara, r.jenis].join(" ").toLowerCase().includes(w)))
+        .sort((a, b) => skor(b) - skor(a) || (b.tarikh || b.created_at || "").localeCompare(a.tarikh || a.created_at || ""));
+      senarai.innerHTML = (list.length ? list.slice(0, 5).map((r) => '<button type="button" class="pj-pilih-kad" data-rjno="' + esc(r.no_rujukan) + '">' + kad(r) + "</button>").join("") : '<p class="small muted">Tiada No. Rujukan sepadan.</p>') +
+        (RJ.bolehJana && !RJ.err ? '<button type="button" class="btn small" data-rj="buka-jana">+ Jana nombor baharu</button>' : "");
+    }
+    function pratonton() {
+      const siri = q("siri").value, k = konteks ? konteks() : {};
+      q("kod_tengah").hidden = siri !== "SURAT"; q("kod").hidden = siri !== "R3B";
+      wrap.querySelector(".rj-pratonton").innerHTML = "Nombor seterusnya: <b class=\"tnum\">" + esc(rjSeterusnya(siri, { tahun: (k.tarikh || TODAY).slice(0, 4), tarikh: k.tarikh || TODAY, kod_tengah: q("kod_tengah").value, kod: q("kod").value })) + "</b>" +
+        (k.tetuan || k.perkara ? '<br><span class="muted">Untuk: ' + esc((k.tetuan || k.perkara).slice(0, 80)) + "</span>" : '<br><span class="muted">Pilih projek atau isi tajuk dahulu supaya rekod rujukan lengkap.</span>');
+    }
+    const set = (v) => { input.value = v; input.dispatchEvent(new Event("change", { bubbles: true })); render(); };
+    wrap.addEventListener("click", async (ev) => {
+      const pilih = ev.target.closest("[data-rjno]"); if (pilih) { set(pilih.dataset.rjno); return; }
+      const t = ev.target.closest("[data-rj]"); if (!t) return;
+      const a = t.dataset.rj;
+      if (a === "tukar") { set(""); cari.value = ""; render(); cari.focus(); }
+      else if (a === "buka-jana") { const k = konteks ? konteks() : {}; if (k.siri) q("siri").value = k.siri; jana.hidden = false; senarai.hidden = true; pratonton(); }
+      else if (a === "batal") { jana.hidden = true; render(); }
+      else if (a === "jana") {
+        const k = konteks ? konteks() : {};
+        if (!k.tetuan && !k.perkara) { toast("Pilih projek atau isi tajuk dahulu."); return; }
+        t.disabled = true;
+        try {
+          const o = await LIVE.api("rujukan.jana", { siri: q("siri").value, tarikh: k.tarikh || TODAY, tetuan: k.tetuan || "", perkara: k.perkara || "", no_fail: k.no_fail || "", project_id: k.project_id || "", kod_tengah: q("kod_tengah").value, kod: q("kod").value });
+          toast("No. Rujukan baharu: " + o.no_rujukan);
+          RJ.list = null; rjLoad(); jana.hidden = true; set(o.no_rujukan);
+        } catch (e) { toast(e.message); }
+        t.disabled = false;
+      }
+    });
+    wrap.addEventListener("input", (ev) => { if (ev.target === cari) render(); else if (ev.target.closest(".rj-jana")) pratonton(); });
+    wrap.addEventListener("change", (ev) => { if (ev.target.closest(".rj-jana")) pratonton(); });
+    cari.addEventListener("keydown", (ev) => { if (ev.key === "Enter") ev.preventDefault(); });
+    render();
+    if (!RJ.list) { let n = 0; const ulang = () => { if (!wrap.isConnected) return; if (RJ.list) { render(); return; } if (++n < 40) setTimeout(ulang, 500); }; setTimeout(ulang, 500); }
+    return { render };
+  }
+
+  /* ---------- Halaman daftar No. Rujukan ---------- */
+  function viewRujukan() {
+    const head = (x) => pageHead("No. Rujukan SCE", "Daftar running number syarikat: Comm. Strategy, SLU, surat dan Kaedah 3B. Nombor baharu dijana di sini atau terus dalam borang kerja.", (x || "") + " " + liveTagDev);
+    if (!RJ.list) { rjLoad(); return head() + '<section class="panel"><div class="empty" role="status"><p>Memuatkan…</p></div></section>'; }
+    if (RJ.err && !RJ.list.length) return head() + '<section class="panel"><div class="empty"><p>' + esc(RJ.err) + '</p><button type="button" class="btn" data-action="rj-reload">Cuba lagi</button></div></section>';
+    if (!LD.program && !LD.err.program) liveLoad("program"); if (!LD.order && !LD.err.order) liveLoad("order");
+    ["rj.siri:Semua", "rj.tahun:" + TODAY.slice(0, 4)].forEach((x) => { const [k, v] = x.split(":"); if (!f(k)) state.filters[k] = v; });
+    const siri = f("rj.siri"), tahun = f("rj.tahun"), kata = f("rj.q").toLowerCase().split(/\s+/).filter(Boolean);
+    const tahunAda = unique(RJ.list.map((r) => r.tahun).filter(Boolean)).sort().reverse();
+    const list = RJ.list.filter((r) => (siri === "Semua" || (siri === "Perlu semak" ? r.bendera : RJ_SIRI_PENDEK[r.siri] === siri)) && (tahun === "Semua" || String(r.tahun) === tahun) &&
+      kata.every((w) => [r.no_rujukan, r.tetuan, r.no_fail, r.perkara, r.jenis, r.lokasi].join(" ").toLowerCase().includes(w)))
+      .sort((a, b) => a.siri === b.siri ? (Number(b.nombor) || 0) - (Number(a.nombor) || 0) : a.siri.localeCompare(b.siri));
+    const projekNama = (r) => { if (!r.project_id || !LD.program) return ""; const p = pjCari(r.project_id); return p ? p.nama : r.project_id; };
+    const semak = RJ.list.filter((r) => r.bendera).length;
+    const seterusnya = ["CS", "LU", "SURAT"].map((s) => '<div class="stat"><dt>' + esc(RJ_SIRI_PENDEK[s]) + ' seterusnya</dt><dd class="tnum">' + esc(rjSeterusnya(s, { tahun: TODAY.slice(0, 4), kod_tengah: s === "SURAT" ? "…" : "" })) + "</dd></div>").join("");
+    return head(RJ.bolehJana && !RJ.err ? btn("+ Jana Nombor", "rj-jana", "primary") : "") +
+      (RJ.err ? note(RJ.err) : "") +
+      '<section class="panel"><dl class="stats">' + seterusnya + '<div class="stat"><dt>Perlu semak</dt><dd>' + semak + '</dd></div></dl></section>' +
+      '<section class="panel" style="margin-top:16px">' + panelHead("Daftar", list.length + " daripada " + RJ.list.length + " rekod", "", liveTagDev) +
+      '<div class="toolbar pj-cari">' + searchBox("rj.q", "Cari No. Rujukan, tetuan, No. Fail…") + filterSelect("rj.tahun", "Tahun", [["Semua", "Semua tahun"]].concat(tahunAda.map((t) => [t, t]))) + "</div>" +
+      '<div class="toolbar">' + chips("rj.siri", ["Semua", "CS", "SLU", "Surat", "Kaedah 3B", "Perlu semak"]) + "</div>" +
+      table([
+        { h: "No. Rujukan", r: (r) => '<button type="button" class="text-link tnum pj-nama" data-action="rj-buka" data-id="' + esc(r.ruj_id) + '">' + esc(r.no_rujukan) + "</button>" + (r.bendera ? "<br>" + rjBendera(r) : "") },
+        { h: "Tarikh", r: (r) => '<span class="tnum">' + esc(isoKeHbt(r.tarikh) || r.tarikh_teks || "—") + "</span>" },
+        { h: "Jenis", r: (r) => esc(r.jenis || RJ_SIRI_PENDEK[r.siri]) },
+        { h: "Tetuan / Perkara", r: (r) => esc((r.tetuan || r.perkara || "—").slice(0, 90)) },
+        { h: "No. Fail DBKL", r: (r) => '<span class="small">' + esc(r.no_fail || "—") + "</span>" },
+        { h: "Projek", r: (r) => (r.project_id ? '<button type="button" class="text-link" data-action="pj-buka" data-ref="' + esc(r.project_id) + '">' + esc(projekNama(r) || r.project_id) + "</button>" : '<span class="muted">—</span>') },
+        { h: "Sumber", r: (r) => '<span class="small muted">' + (r.sumber === "IMPORT" ? "Fail lama" : esc(namaPapar(r.oleh || ""))) + "</span>" }
+      ], list, empty("Tiada rekod sepadan.")) + "</section>";
+  }
+
+  /** Borang jana nombor dari halaman daftar (pilih projek atau isi tetuan / perkara). */
+  function rjJanaBorang(refProjek) {
+    const pj = refProjek ? pjCari(refProjek) : null;
+    openForm({ live: true, liveNota: "Rekod sebenar DEV: daftar dalam SCE-DEV-TASKS (tab RUJUKAN). Nombor muktamad diberi oleh server.", title: "+ Jana No. Rujukan SCE", submit: "Jana Nombor", fields: [
+      { name: "siri", label: "Siri", type: "select", full: true, options: [["CS", "Comm. Strategy (BIL./CS)"], ["LU", "SLU (BIL./LU)"], ["SURAT", "Surat (L-0000)"], ["R3B", "Kaedah 3B (SCE/R3B)"]], value: pj ? (pj.jenis === "COMSTRA" ? "CS" : /SLU/.test(pj.jenis) ? "LU" : /SIGNBOARD 3B/.test(pj.jenis) ? "R3B" : "CS") : "CS" },
+      { name: "kod_tengah", label: "Kod tengah surat (contoh AIA/ET)", maxlength: 20 },
+      { name: "kod", label: "Kod pelanggan Kaedah 3B (contoh TTII)", maxlength: 10 },
+      { name: "projek", label: "Projek (pilihan)", full: true, maxlength: 250, value: pj ? pjLabel(pj) : "" },
+      { name: "tetuan", label: "Tetuan / Pelanggan", full: true, maxlength: 200, value: pj ? pj.nama : "" },
+      { name: "perkara", label: "Perkara / Keterangan", type: "textarea", full: true, maxlength: 500 },
+      { name: "no_fail", label: "No. Fail DBKL (pilihan)", maxlength: 80, value: pj && pj.src && pj.src.noFail ? pj.src.noFail : "" },
+      { name: "tarikh", label: "Tarikh", type: "date", value: (pj && pj.tarikh) || TODAY }
+    ], onSubmit: async (v) => {
+      const ref = pjRefDariTeks(v.projek || "");
+      try {
+        const o = await LIVE.api("rujukan.jana", { siri: v.siri, kod_tengah: v.kod_tengah, kod: v.kod, project_id: ref, tetuan: v.tetuan, perkara: v.perkara, no_fail: v.no_fail, tarikh: v.tarikh || TODAY });
+        openInfo({ title: "No. Rujukan baharu", body: '<p class="rj-besar tnum">' + esc(o.no_rujukan) + '</p><p class="small muted">Disimpan dalam daftar No. Rujukan SCE' + (ref ? " dan dipaut ke projek." : ".") + "</p>" });
+      } catch (e) { toast(e.message); }
+      rjReload();
+    } });
+    const fm = modal.querySelector("form"), siriEl = fm.querySelector("[name=siri]"), pjEl = fm.querySelector("[name=projek]");
+    pjPemilih(pjEl);
+    const kemas = () => { fm.querySelector("[name=kod_tengah]").closest(".field").hidden = siriEl.value !== "SURAT"; fm.querySelector("[name=kod]").closest(".field").hidden = siriEl.value !== "R3B"; };
+    siriEl.addEventListener("change", kemas); kemas();
+    pjEl.addEventListener("change", () => { const x = pjCari(pjRefDariTeks(pjEl.value)); if (!x) return; fm.querySelector("[name=tetuan]").value = x.nama; if (x.src && x.src.noFail) fm.querySelector("[name=no_fail]").value = x.src.noFail; });
+  }
+
+  /** Butiran satu rekod rujukan + paut projek (SA/MG/PM). */
+  function rjBuka(id) {
+    const r = (RJ.list || []).find((x) => x.ruj_id === id); if (!r) return;
+    const p = r.project_id && LD.program ? pjCari(r.project_id) : null;
+    openInfo({ title: r.no_rujukan, actions: RJ.bolehUbah ? btn(r.project_id ? "Tukar projek" : "Pautkan ke projek", "rj-paut", "", ' data-id="' + esc(r.ruj_id) + '"') + " " : "", body: (r.bendera ? '<p>' + rjBendera(r) + "</p>" : "") + detailList([
+      ["Siri", esc(RJ_SIRI[r.siri] || r.siri)], ["Tarikh", esc(isoKeHbt(r.tarikh) || r.tarikh_teks || "—")], ["Jenis", esc(r.jenis || "—")], ["Tetuan / Pelanggan", esc(r.tetuan || "—")],
+      ["No. Fail DBKL", esc(r.no_fail || "—")], ["Perkara", esc(r.perkara || "—")], ["Lokasi", esc(r.lokasi || "—")], ["No. Quo.", esc(r.no_quo || "—")], ["Status (fail lama)", esc(r.status_asal || "—")],
+      ["Pautan", r.pautan && /^https?:\/\//i.test(r.pautan) ? '<a href="' + esc(r.pautan) + '" target="_blank" rel="noopener noreferrer">Buka ↗</a>' : "—"],
+      ["Projek", r.project_id ? '<button type="button" class="text-link" data-action="pj-buka" data-ref="' + esc(r.project_id) + '">' + esc(p ? p.nama : r.project_id) + "</button>" : "—"],
+      ["Sumber", r.sumber === "IMPORT" ? "Import fail lama" : "Dijana dalam SCE CENTRAL oleh " + esc(namaPapar(r.oleh || ""))]
+    ]) });
+  }
+  function rjPaut(id) {
+    const r = (RJ.list || []).find((x) => x.ruj_id === id); if (!r) return;
+    const kini = r.project_id ? pjCari(r.project_id) : null;
+    openForm({ live: true, liveNota: "Rekod sebenar DEV: daftar dalam SCE-DEV-TASKS (tab RUJUKAN).", title: "Pautkan " + r.no_rujukan + " ke projek", submit: "Simpan", fields: [
+      { name: "projek", label: "Projek", full: true, maxlength: 250, value: kini ? pjLabel(kini) : "", help: "Tekan Tukar kemudian Simpan tanpa memilih untuk membuang pautan." }
+    ], onSubmit: async (v) => {
+      const teks = String(v.projek || "").trim(), ref = teks ? pjRefDariTeks(teks) : "";
+      if (teks && !ref) { toast("Pilih projek dari senarai."); return; }
+      try { await LIVE.api("rujukan.kemas", { ruj_id: r.ruj_id, project_id: ref }); toast(ref ? "Dipautkan ke projek." : "Pautan dibuang."); } catch (e) { toast(e.message); }
+      rjReload();
+    } });
+    pjPemilih(modal.querySelector("[name=projek]"));
   }
 
   /* ========== Pusat Dokumen (pautan Canva / Google Drive / lain) ========== */
@@ -1577,6 +1777,7 @@
         '<div class="dk-isi"><h3 class="dk-tajuk">' + esc(d.tajuk) + "</h3>" +
           '<p class="small"><span class="badge neutral">' + esc(d.kategori) + "</span>" + (d.tersembunyi ? ' <span class="badge bad">Tersembunyi</span>' : "") + "</p>" +
           (d.auto ? '<p class="small muted">' + (d.rujukan ? "No. Ruj. " + esc(d.rujukan) : "Quotation muktamad") + "</p>" : '<p class="small muted">' + esc(dkRujTeks(d)) + "</p>") +
+          (d.no_rujukan ? '<p class="small tnum"><b>' + esc(d.no_rujukan) + "</b></p>" : "") +
           (d.jenis === "PDF" && d.nama_fail ? '<p class="small muted dk-url">' + esc(d.nama_fail) + (d.saiz_bait ? " · " + dkSaiz(d.saiz_bait) : "") + "</p>" : "") +
           '<p class="small muted">' + esc(namaPapar(d.oleh || "")) + " · " + esc(dkTarikh(d.updated_at || d.created_at)) + "</p></div></article>";
     };
@@ -1603,6 +1804,7 @@
       { name: "url", label: "Pautan", type: "url", full: true, maxlength: 1000, value: ada ? d.url : "", help: dkPetunjuk(ada ? d.url : "") },
       { name: "rujukan_jenis", label: "Dipaut kepada", type: "select", options: Object.entries(DK_RUJ), value: refProjek ? "PROJEK" : ada ? d.rujukan_jenis : "UMUM" },
       { name: "rujukan", label: "Projek / rujukan", maxlength: 250, value: pjPra ? pjLabel(pjPra) : ada ? d.rujukan : "", help: "Untuk Projek: cari dan klik projek. Untuk pilihan lain: taip rujukan." },
+      { name: "no_rujukan", label: "No. Rujukan SCE (pilihan)", full: true, maxlength: 60, value: ada ? d.no_rujukan || "" : pjPra && pjPra.rujukanSce && pjPra.rujukanSce.length === 1 ? pjPra.rujukanSce[0].no_rujukan : "" },
       { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 500, value: ada ? d.catatan : "" }
     ];
     // Keputusan pemilik 17/11/2026: tiada lagi pilihan "Pengurusan sahaja"; semua dokumen aktif dilihat semua pengguna.
@@ -1610,7 +1812,7 @@
       intro: dkDemo() ? note("Pratonton sahaja: tiada apa disimpan.") : "",
       onSubmit: async (v) => {
         const cara = v.cara === "PAUTAN" ? "PAUTAN" : "PDF";
-        const isi = { doc_id: ada ? d.doc_id : "", cara: cara, tajuk: v.tajuk, kategori: v.kategori, url: cara === "PAUTAN" ? v.url : "", rujukan_jenis: v.rujukan_jenis, rujukan: v.rujukan_jenis === "UMUM" ? "" : v.rujukan, catatan: v.catatan, akses: v.akses || (ada ? d.akses : "SEMUA") };
+        const isi = { doc_id: ada ? d.doc_id : "", cara: cara, tajuk: v.tajuk, kategori: v.kategori, url: cara === "PAUTAN" ? v.url : "", rujukan_jenis: v.rujukan_jenis, rujukan: v.rujukan_jenis === "UMUM" ? "" : v.rujukan, catatan: v.catatan, akses: v.akses || (ada ? d.akses : "SEMUA"), no_rujukan: v.no_rujukan || "" };
         if (isi.rujukan_jenis === "PROJEK") { isi.rujukan = pjRefDariTeks(isi.rujukan) || (ada && d.rujukan_jenis === "PROJEK" && isi.rujukan === d.rujukan ? d.rujukan : ""); if (!isi.rujukan) { toast("Pilih projek dari senarai."); return; } }
         const p = cara === "PAUTAN" ? dkKenal(isi.url) : { jenis: "PDF" };
         if (!p) { toast("Pautan tidak sah. Mesti bermula dengan https://."); return; }
@@ -1657,6 +1859,9 @@
     }
     const pemilih = rEl && LIVE_USER ? pjPemilih(rEl) : null;
     if (rEl) rEl.setAttribute("list", "dk-ruj-senarai");
+    const rjDk = modal.querySelector("[name=no_rujukan]");
+    if (rjDk && LIVE_USER) rjPemilih(rjDk, () => { const x = rjEl && rjEl.value === "PROJEK" ? pjCari(pjRefDariTeks(rEl.value)) : null, kat = modal.querySelector("[name=kategori]").value;
+      return { tetuan: x ? x.nama : "", no_fail: x && x.src ? x.src.noFail || "" : "", perkara: modal.querySelector("[name=tajuk]").value, tarikh: TODAY, project_id: x ? x.ref : "", siri: /Surat/.test(kat) ? "SURAT" : x ? rjSiriProjek(x) : "SURAT" }; });
     const kemasRuj = () => { if (!rEl) return; const pj = rjEl.value === "PROJEK"; rEl.disabled = rjEl.value === "UMUM"; if (rEl.disabled || (!pj && pjRefDariTeks(rEl.value))) rEl.value = ""; if (pemilih) pemilih.papar(pj); };
     if (rjEl) { rjEl.addEventListener("change", kemasRuj); kemasRuj(); }
   }
@@ -2197,6 +2402,15 @@
       QT.edit = q; refresh();
     } catch (e) { toast(e.message); }
   }
+  /** Pilih atau jana No. Rujukan SCE untuk quotation (diisi ke medan No. Ruj. Syarikat). */
+  function qtRujukan() {
+    qtBaca();
+    const e = QT.edit; if (!e) return;
+    openForm({ live: true, liveNota: "No. Rujukan disimpan dalam quotation bila anda tekan Simpan Draf.", title: "No. Rujukan SCE · Quotation", submit: "Guna nombor ini", fields: [
+      { name: "no_ruj", label: "No. Rujukan SCE", full: true, maxlength: 60, value: e.no_ruj || "" }
+    ], onSubmit: (v) => { QT.edit.no_ruj = v.no_ruj || ""; toast(v.no_ruj ? "No. Ruj. diisi: " + v.no_ruj + ". Tekan Simpan Draf." : "No. Ruj. dikosongkan."); refresh(); } });
+    rjPemilih(modal.querySelector("[name=no_ruj]"), () => ({ tetuan: e.pelanggan || "", perkara: "Quotation " + (e.no_quo || ""), tarikh: e.tarikh || TODAY, siri: "R3B" }));
+  }
   function qtBaca() {
     const el = document.getElementById("quo-editor"); if (!el || !QT.edit) return;
     const e = QT.edit;
@@ -2247,7 +2461,7 @@
       (kunci ? "" : '<select class="inline-select qt-pilih" data-qt-item="' + bi + '" aria-label="Tambah item"><option value="">+ Tambah item…</option>' + qtItemTiada(e, bi).map((x) => '<option value="t' + x.i + '">' + esc(x.perkara.length > 80 ? x.perkara.slice(0, 80) + "…" : x.perkara) + "</option>").join("") + '<option value="kosong">Item kosong (tulis sendiri)</option></select>') + "</div>").join("");
     return pageHead(e.quo_id ? "Quotation " + e.no_quo : "Quotation Baharu", kunci ? "Quotation ini sudah dimuktamadkan dan dikunci." : "Templat " + (e.jenis === "COMSTRA" ? "Communication Strategy" : e.jenis) + ". Ubah item, kuantiti dan harga mengikut projek.", liveTagDev) +
       '<section class="panel" id="quo-editor">' +
-        '<h3 class="sub-head">Maklumat Quotation</h3><div class="form-grid">' + inp("no_quo", "No. Quo. / Invoice", e.no_quo) + inp("no_ruj", "No. Ruj. Syarikat", e.no_ruj) + tq("tarikh", "Tarikh", e.tarikh) + "</div>" +
+        '<h3 class="sub-head">Maklumat Quotation</h3><div class="form-grid">' + inp("no_quo", "No. Quo. / Invoice", e.no_quo) + inp("no_ruj", "No. Ruj. Syarikat", e.no_ruj) + (kunci ? "" : '<div class="field"><span>&nbsp;</span>' + btn("Pilih / Jana No. Rujukan SCE", "qt-ruj", "small") + "</div>") + tq("tarikh", "Tarikh", e.tarikh) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Pelanggan</h3><div class="form-grid">' + inp("pelanggan.nama", "Kepada (nama syarikat + no. pendaftaran)", e.pelanggan.nama) + ta("pelanggan.alamat", "Alamat", e.pelanggan.alamat, 2) + ta("pelanggan.hantarKepada", "Hantar kepada (pilihan)", e.pelanggan.hantarKepada, 2) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Butiran Projek</h3><div class="form-grid">' + ta("pengenalan", "Pengenalan / cadangan pembangunan", e.pengenalan, 5) + inp("untuk", "UNTUK (Tetuan)", e.untuk) + inp("rujukanDbkl", "No. Rujukan DBKL", e.rujukanDbkl) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Item</h3>' + bahagian + (kunci ? "" : '<div style="margin-top:8px"><select class="inline-select qt-pilih" data-qt-bahagian aria-label="Tambah bahagian"><option value="">+ Tambah bahagian…</option>' + qtBahagianTiada(e).map((b) => '<option value="t' + b.i + '">' + esc(b.tajuk) + "</option>").join("") + '<option value="kosong">Bahagian kosong (tulis sendiri)</option></select></div>') +
@@ -2527,7 +2741,7 @@
     return '<div class="toolbar ops-tabs" aria-label="Kategori operasi">' + chips("ops.tab", tabs) + "</div>" + (f("ops.tab") === "dbkl" ? viewDbkl() : viewPrograms());
   }
   const NAV = [
-    ["Modul", [["dashboard", "Dashboard", viewDashboard], ["projects", "Projects", viewProjects], ["tasks", "Tasks", viewTasks], ["operations", "Operations", viewOperations], ["finance", "Finance", viewFinance], ["documents", "Documents", viewDocuments], ["payroll", "Slip Gaji", viewPayroll], ["quotation", "Quotation", viewQuotation]]],
+    ["Modul", [["dashboard", "Dashboard", viewDashboard], ["projects", "Projects", viewProjects], ["tasks", "Tasks", viewTasks], ["operations", "Operations", viewOperations], ["finance", "Finance", viewFinance], ["documents", "Documents", viewDocuments], ["rujukan", "No. Rujukan", viewRujukan], ["payroll", "Slip Gaji", viewPayroll], ["quotation", "Quotation", viewQuotation]]],
     ["Tetapan", [["access", "Pengguna & Akses", viewAccess], ["staff", "Direktori Staf", viewStaff], ["settings", "Tetapan Sistem", viewSettings]]]
   ];
   const NAV_SOROK = ["finance"];
@@ -2744,6 +2958,12 @@
     "pj-laporan"(el) { dkBorang(null, el.dataset.ref, "Laporan"); },
     "pj-surat"(el) { dkBorang(null, el.dataset.ref, "Surat Jemputan"); },
     "pj-tapis"(el) { const t = el.dataset.tapis; state.filters["pj.status"] = t === "Selesai" ? "Selesai" : "Aktif"; state.filters["pj.jenis"] = t === "Signboard" ? "Signboard" : "Semua"; refresh(); },
+    "rj-reload"() { rjReload(); },
+    "rj-jana"() { rjJanaBorang(null); },
+    "rj-buka"(el) { rjBuka(el.dataset.id); },
+    "rj-paut"(el) { rjPaut(el.dataset.id); },
+    "pj-ruj"(el) { rjJanaBorang(el.dataset.ref); },
+    "qt-ruj"() { qtRujukan(); },
     "dk-reload"() { dkReload(); },
     "dk-tambah"() { dkBorang(null); },
     "dk-lihat"(el) { dkLihat(el.dataset.id); },

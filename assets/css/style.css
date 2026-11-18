@@ -688,3 +688,10 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
 .pj-tahap-btn:hover, .pj-tahap-btn:focus-visible { border-color: var(--accent, #33C2B8); background: var(--surface-sunk); outline: none; }
 .pj-tahap-btn:disabled { opacity: .6; cursor: progress; }
 .pj-langkah li .small.muted { margin-left: 4px; }
+
+/* No. Rujukan SCE (18/11/2026) */
+.rj-jana { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--accent, #33C2B8); border-radius: var(--r-sm, 6px); background: var(--surface-sunk); }
+.rj-jana-baris { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rj-jana-baris input { font: inherit; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: var(--surface); color: var(--text); }
+.rj-pratonton { margin: 0; }
+.rj-besar { font-size: 26px; font-weight: 700; margin: 8px 0; color: var(--text); }
