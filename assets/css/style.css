@@ -748,3 +748,14 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
 .q3b-sah { margin-top: 18px; border: 2px solid #000; background: #fad7b5; color: #000; font-weight: 700; text-align: center; padding: 5px; }
 .q3b-setuju { margin-top: 10px; }
 .q3b-isi td { padding: 1px 30px 1px 0; }
+
+/* Quotation SLU (20/11/2026) */
+.qt-acara { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, .8fr) minmax(0, 1.4fr) auto; gap: 6px; margin-top: 6px; align-items: center; }
+.qt-acara input { font: inherit; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--r-sm, 6px); background: var(--surface); color: var(--text); min-width: 0; }
+@media (max-width: 720px) { .qt-acara { grid-template-columns: 1fr 1fr; } }
+.lu-tajuk u { background: #00ffff; }
+.lu-ket { margin-top: 4px; padding-left: 14px; white-space: pre-wrap; }
+.lu-kotak { border: 1px solid #000 !important; }
+.lu-acara { margin: 6px 0 0; font-weight: 700; }
+.lu-acara td { padding: 0 8px 0 0; vertical-align: top; }
+.q3b-sambung { break-before: auto; margin-top: 18px; }

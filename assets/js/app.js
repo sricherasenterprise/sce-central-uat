@@ -1521,8 +1521,8 @@
   /* ========== No. Rujukan SCE (daftar running number, 18/11/2026) ========== */
   /* Rekod diimport dari fail "Running Number - Sri Cheras Enterprise"; nombor baharu dijana oleh SCE CENTRAL (rujukan.jana). */
   const RJ = { list: null, bolehJana: false, bolehUbah: false, err: null, busy: false };
-  const RJ_SIRI = { CS: "Comm. Strategy (BIL./CS)", LU: "SLU (BIL./LU)", SURAT: "Surat (L-0000)", R3A: "Kaedah 3A (SCE/R3A)", R3B: "Kaedah 3B (SCE/R3B)", INV: "Invois" };
-  const RJ_SIRI_PENDEK = { CS: "CS", LU: "SLU", SURAT: "Surat", R3A: "Kaedah 3A", R3B: "Kaedah 3B", INV: "Invois" };
+  const RJ_SIRI = { CS: "Comm. Strategy (BIL./CS)", LU: "SLU (BIL./LU)", SURAT: "Surat (L-0000)", R3A: "Kaedah 3A (SCE/R3A)", R3B: "Kaedah 3B (SCE/R3B)", SLU: "Quotation SLU (SCE/SLU)", INV: "Invois" };
+  const RJ_SIRI_PENDEK = { CS: "CS", LU: "SLU", SURAT: "Surat", R3A: "Kaedah 3A", R3B: "Kaedah 3B", SLU: "Quo. SLU", INV: "Invois" };
   const rjNormalFail = (v) => { const s = String(v || "").toUpperCase().replace(/\s+/g, "").replace(/[.]/g, ""); return /\*/.test(s) || !/\d/.test(s) ? "" : s; };
   function rjLoad() {
     if (RJ.busy || !LIVE_USER || LIVE_USER.role === "VIEWER") return;
@@ -1555,7 +1555,7 @@
     const maks = (arr) => arr.reduce((a, r) => Math.max(a, Number(r.nombor) || 0), 0);
     if (siri === "CS" || siri === "LU") return "BIL." + (maks(aktif.filter((r) => String(r.tahun) === tahun)) + 1) + "/" + siri + "/" + tahun;
     if (siri === "SURAT") { const k = String(o.kod_tengah || "").toUpperCase().replace(/\s+/g, ""); return k ? "SCE/" + k + "/L-" + String(maks(aktif) + 1).padStart(4, "0") : "SCE/<kod>/L-" + String(maks(aktif) + 1).padStart(4, "0"); }
-    if (siri === "R3B" || siri === "R3A") { const k = String(o.kod || "").toUpperCase().replace(/[^A-Z]/g, ""), m = /^(\d{4})-(\d{2})/.exec(o.tarikh || TODAY); const aw = "SCE/" + siri + "/" + m[2] + "/" + m[1].slice(2) + "/" + (k || "<KOD>"); return aw + String(maks(aktif.filter((r) => String(r.no_rujukan).toUpperCase().indexOf(aw) === 0)) + 1).padStart(2, "0"); }
+    if (siri === "R3B" || siri === "R3A" || siri === "SLU") { const k = String(o.kod || "").toUpperCase().replace(/[^A-Z]/g, ""), m = /^(\d{4})-(\d{2})/.exec(o.tarikh || TODAY); const aw = "SCE/" + siri + "/" + m[2] + "/" + m[1].slice(2) + "/" + (k || "<KOD>"); return aw + String(maks(aktif.filter((r) => String(r.no_rujukan).toUpperCase().indexOf(aw) === 0)) + 1).padStart(2, "0"); }
     return "";
   }
 
@@ -1567,7 +1567,7 @@
     if (!RJ.list && !RJ.busy) rjLoad();
     const wrap = document.createElement("div"); wrap.className = "pj-pilih rj-pilih";
     wrap.innerHTML = '<div class="pj-pilih-terpilih"></div><input type="search" class="pj-pilih-cari" placeholder="Cari No. Rujukan, tetuan atau No. Fail…" autocomplete="off" aria-label="Cari No. Rujukan SCE"><div class="pj-pilih-senarai" role="list"></div>' +
-      '<div class="rj-jana" hidden><div class="rj-jana-baris"><select class="inline-select" data-rj="siri" aria-label="Siri"><option value="CS">Comm. Strategy (BIL./CS)</option><option value="LU">SLU (BIL./LU)</option><option value="SURAT">Surat (L-0000)</option><option value="R3A">Kaedah 3A (SCE/R3A)</option><option value="R3B">Kaedah 3B (SCE/R3B)</option></select>' +
+      '<div class="rj-jana" hidden><div class="rj-jana-baris"><select class="inline-select" data-rj="siri" aria-label="Siri"><option value="CS">Comm. Strategy (BIL./CS)</option><option value="LU">SLU (BIL./LU)</option><option value="SURAT">Surat (L-0000)</option><option value="R3A">Kaedah 3A (SCE/R3A)</option><option value="R3B">Kaedah 3B (SCE/R3B)</option><option value="SLU">Quotation SLU (SCE/SLU)</option></select>' +
       '<input data-rj="kod_tengah" placeholder="Kod tengah, cth AIA/ET" maxlength="20" hidden><input data-rj="kod" placeholder="Kod pelanggan, cth TTII" maxlength="10" hidden></div><p class="small rj-pratonton"></p><div class="rj-jana-baris">' +
       '<button type="button" class="btn small primary" data-rj="jana">Jana nombor ini</button><button type="button" class="btn small" data-rj="batal">Batal</button></div></div>';
     const terpilih = wrap.querySelector(".pj-pilih-terpilih"), cari = wrap.querySelector(".pj-pilih-cari"), senarai = wrap.querySelector(".pj-pilih-senarai"), jana = wrap.querySelector(".rj-jana");
@@ -1593,7 +1593,7 @@
     }
     function pratonton() {
       const siri = q("siri").value, k = konteks ? konteks() : {};
-      q("kod_tengah").hidden = siri !== "SURAT"; q("kod").hidden = siri !== "R3B" && siri !== "R3A";
+      q("kod_tengah").hidden = siri !== "SURAT"; q("kod").hidden = siri !== "R3B" && siri !== "R3A" && siri !== "SLU";
       wrap.querySelector(".rj-pratonton").innerHTML = "Nombor seterusnya: <b class=\"tnum\">" + esc(rjSeterusnya(siri, { tahun: (k.tarikh || TODAY).slice(0, 4), tarikh: k.tarikh || TODAY, kod_tengah: q("kod_tengah").value, kod: q("kod").value })) + "</b>" +
         (k.tetuan || k.perkara ? '<br><span class="muted">Untuk: ' + esc((k.tetuan || k.perkara).slice(0, 80)) + "</span>" : '<br><span class="muted">Pilih projek atau isi tajuk dahulu supaya rekod rujukan lengkap.</span>');
     }
@@ -1645,7 +1645,7 @@
       '<section class="panel"><dl class="stats">' + seterusnya + '<div class="stat"><dt>Perlu semak</dt><dd>' + semak + '</dd></div></dl></section>' +
       '<section class="panel" style="margin-top:16px">' + panelHead("Daftar", list.length + " daripada " + RJ.list.length + " rekod", "", liveTagDev) +
       '<div class="toolbar pj-cari">' + searchBox("rj.q", "Cari No. Rujukan, tetuan, No. Fail…") + filterSelect("rj.tahun", "Tahun", [["Semua", "Semua tahun"]].concat(tahunAda.map((t) => [t, t]))) + "</div>" +
-      '<div class="toolbar">' + chips("rj.siri", ["Semua", "CS", "SLU", "Surat", "Kaedah 3A", "Kaedah 3B", "Perlu semak"]) + "</div>" +
+      '<div class="toolbar">' + chips("rj.siri", ["Semua", "CS", "SLU", "Surat", "Kaedah 3A", "Kaedah 3B", "Quo. SLU", "Perlu semak"]) + "</div>" +
       table([
         { h: "No. Rujukan", r: (r) => '<button type="button" class="text-link tnum pj-nama" data-action="rj-buka" data-id="' + esc(r.ruj_id) + '">' + esc(r.no_rujukan) + "</button>" + (r.bendera ? "<br>" + rjBendera(r) : "") },
         { h: "Tarikh", r: (r) => '<span class="tnum">' + esc(isoKeHbt(r.tarikh) || r.tarikh_teks || "—") + "</span>" },
@@ -1661,7 +1661,7 @@
   function rjJanaBorang(refProjek) {
     const pj = refProjek ? pjCari(refProjek) : null;
     openForm({ live: true, liveNota: "Rekod sebenar DEV: daftar dalam SCE-DEV-TASKS (tab RUJUKAN). Nombor muktamad diberi oleh server.", title: "+ Jana No. Rujukan SCE", submit: "Jana Nombor", fields: [
-      { name: "siri", label: "Siri", type: "select", full: true, options: [["CS", "Comm. Strategy (BIL./CS)"], ["LU", "SLU (BIL./LU)"], ["SURAT", "Surat (L-0000)"], ["R3A", "Kaedah 3A (SCE/R3A)"], ["R3B", "Kaedah 3B (SCE/R3B)"]], value: pj ? (pj.jenis === "COMSTRA" ? "CS" : /SLU/.test(pj.jenis) ? "LU" : /SIGNBOARD 3B/.test(pj.jenis) ? "R3B" : /SIGNBOARD 3A/.test(pj.jenis) ? "R3A" : "CS") : "CS" },
+      { name: "siri", label: "Siri", type: "select", full: true, options: [["CS", "Comm. Strategy (BIL./CS)"], ["LU", "SLU (BIL./LU)"], ["SURAT", "Surat (L-0000)"], ["R3A", "Kaedah 3A (SCE/R3A)"], ["R3B", "Kaedah 3B (SCE/R3B)"], ["SLU", "Quotation SLU (SCE/SLU)"]], value: pj ? (pj.jenis === "COMSTRA" ? "CS" : /SLU/.test(pj.jenis) ? "LU" : /SIGNBOARD 3B/.test(pj.jenis) ? "R3B" : /SIGNBOARD 3A/.test(pj.jenis) ? "R3A" : "CS") : "CS" },
       { name: "kod_tengah", label: "Kod tengah surat (contoh AIA/ET)", maxlength: 20 },
       { name: "kod", label: "Kod pelanggan Kaedah 3B (contoh TTII)", maxlength: 10 },
       { name: "projek", label: "Projek (pilihan)", full: true, maxlength: 250, value: pj ? pjLabel(pj) : "" },
@@ -1679,7 +1679,7 @@
     } });
     const fm = modal.querySelector("form"), siriEl = fm.querySelector("[name=siri]"), pjEl = fm.querySelector("[name=projek]");
     pjPemilih(pjEl);
-    const kemas = () => { fm.querySelector("[name=kod_tengah]").closest(".field").hidden = siriEl.value !== "SURAT"; fm.querySelector("[name=kod]").closest(".field").hidden = siriEl.value !== "R3B" && siriEl.value !== "R3A"; };
+    const kemas = () => { fm.querySelector("[name=kod_tengah]").closest(".field").hidden = siriEl.value !== "SURAT"; fm.querySelector("[name=kod]").closest(".field").hidden = siriEl.value !== "R3B" && siriEl.value !== "R3A" && siriEl.value !== "SLU"; };
     siriEl.addEventListener("change", kemas); kemas();
     pjEl.addEventListener("change", () => { const x = pjCari(pjRefDariTeks(pjEl.value)); if (!x) return; fm.querySelector("[name=tetuan]").value = x.nama; if (x.src && x.src.noFail) fm.querySelector("[name=no_fail]").value = x.src.noFail; });
   }
@@ -2389,8 +2389,16 @@
   }
 
   /* ---------- Templat quotation Kaedah 3A / 3B (19/11/2026) ---------- */
-  const QT_JENIS = { COMSTRA: "Communication Strategy", KAEDAH_3A: "Pemasangan Signboard Kaedah 3A", KAEDAH_3B: "Pemasangan Signboard Kaedah 3B" };
-  const qtKaedah = (e) => /^KAEDAH_3[AB]$/.test(e.jenis || "");
+  const QT_JENIS = { COMSTRA: "Communication Strategy", KAEDAH_3A: "Pemasangan Signboard Kaedah 3A", KAEDAH_3B: "Pemasangan Signboard Kaedah 3B", SLU_PARLIMEN: "Sesi Libat Urus dengan Parlimen", SLU_PEMBANTAH: "Sesi Libat Urus dengan Pembantah" };
+  // Bahagian editor ikut templat (selain Comstra): untung %, garis masa, kerja, terma, nota, sesi acara
+  const QT_GAYA = {
+    KAEDAH_3A: { untung: false, garisMasa: true, kerja: true, syarat: true, nota: true, acara: false },
+    KAEDAH_3B: { untung: false, garisMasa: true, kerja: true, syarat: true, nota: true, acara: false },
+    SLU_PARLIMEN: { untung: false, garisMasa: false, kerja: true, syarat: true, nota: true, acara: false },
+    SLU_PEMBANTAH: { untung: true, garisMasa: false, kerja: false, syarat: true, nota: false, acara: true }
+  };
+  const qtKaedah = (e) => !!QT_GAYA[e.jenis || ""];
+  const qtTanpaUntung = (e) => qtKaedah(e) && !QT_GAYA[e.jenis].untung;
   const QT_ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii"];
   function qtPilihTemplat() {
     openForm({ live: true, liveNota: "Quotation disimpan dalam SCE-DEV-QUOTATION bila anda tekan Simpan Draf.", title: "Quotation Baharu", submit: "Mula", fields: [
@@ -2415,12 +2423,48 @@
   function qtEditorKaedah(e, kunci, dis, ta) {
     const gm = (e.garisMasa || []).map((g, i) => '<div class="qt-gm"><input data-g="perkara" value="' + esc(g.perkara) + '" placeholder="Perkara"' + dis + ' aria-label="Perkara"><input data-g="tarikh" value="' + esc(g.tarikh) + '" placeholder="Tarikh / julat"' + dis + ' aria-label="Tarikh">' +
       (kunci ? "" : '<button type="button" class="icon-btn" data-action="qt-gm-buang" data-i="' + i + '" aria-label="Buang baris">✕</button>') + "</div>").join("");
-    return '<h3 class="sub-head" style="margin-top:16px">Garis Masa / Tarikh Penting</h3>' +
+    const g = QT_GAYA[e.jenis] || {};
+    const acara = (e.acara || []).map((a, i) => '<div class="qt-acara"><input data-a="tajuk" value="' + esc(a.tajuk) + '" placeholder="Contoh: Sesi Libat Urus Pertama"' + dis + ' aria-label="Nama sesi">' +
+      tarikhHtml('data-a="tarikh"', a.tarikh || "", dis) + '<input data-a="masa" value="' + esc(a.masa) + '" placeholder="Masa, cth 2.00 petang"' + dis + ' aria-label="Masa">' +
+      '<input data-a="tempat" value="' + esc(a.tempat) + '" placeholder="Tempat"' + dis + ' aria-label="Tempat">' + (kunci ? "" : '<button type="button" class="icon-btn" data-action="qt-acara-buang" data-i="' + i + '" aria-label="Buang sesi">✕</button>') + "</div>").join("");
+    return (g.garisMasa ? '<h3 class="sub-head" style="margin-top:16px">Garis Masa / Tarikh Penting</h3>' +
       (kunci ? "" : '<div class="qt-gm-kira"><label class="field"><span>Tarikh pemasangan signboard</span>' + tarikhHtml('data-gm-pasang', e._tarikhPasang || "", "") + "</label>" + btn("Kira semua tarikh", "qt-gm-kira", "small") + '<span class="small muted">Dikira mengikut contoh quotation. Boleh diubah selepas itu.</span></div>') +
-      '<div class="qt-gm-senarai">' + gm + "</div>" + (kunci ? "" : btn("+ Baris tarikh", "qt-gm-tambah", "small")) +
-      '<h3 class="sub-head" style="margin-top:16px">Kerja-kerja, Terma dan Nota</h3><div class="form-grid">' +
-      ta("kerja", e.jenis === "KAEDAH_3A" ? "Antara kerja-kerja yang dijalankan" : "Kerja-kerja yang dijalankan turut merangkumi", e.kerja, 5) +
-      ta("syarat", e.jenis === "KAEDAH_3A" ? "Terma (a, b…)" : "Terma & Syarat", e.syarat, 5) + ta("nota", "Nota", e.nota, 3) + "</div>";
+      '<div class="qt-gm-senarai">' + gm + "</div>" + (kunci ? "" : btn("+ Baris tarikh", "qt-gm-tambah", "small")) : "") +
+      (g.acara ? '<h3 class="sub-head" style="margin-top:16px">Tarikh Acara (Sesi)</h3><p class="small muted">Hari dikira automatik daripada tarikh semasa cetak.</p><div class="qt-acara-senarai">' + acara + "</div>" + (kunci ? "" : btn("+ Sesi", "qt-acara-tambah", "small")) : "") +
+      '<h3 class="sub-head" style="margin-top:16px">' + (g.kerja ? "Kerja-kerja, " : "") + "Terma" + (g.nota ? " dan Nota" : "") + '</h3><div class="form-grid">' +
+      (g.kerja ? ta("kerja", e.jenis === "KAEDAH_3A" ? "Antara kerja-kerja yang dijalankan" : "Kerja-kerja yang dijalankan turut merangkumi", e.kerja, 5) : "") +
+      ta("syarat", e.jenis === "KAEDAH_3A" ? "Terma (a, b…)" : e.jenis === "SLU_PEMBANTAH" ? "Terma dan Syarat" : "Terma & Syarat", e.syarat, 5) + (g.nota ? ta("nota", "Nota", e.nota, 3) : "") + "</div>";
+  }
+
+  /* ---------- Cetakan SLU dengan Pembantah (gaya Comstra) ---------- */
+  function qtHtmlLU(q, c, j, ttImg) {
+    const rm = (sen) => qtRM(sen);
+    const hari = (d) => (d ? DAYS[new Date(d + "T00:00:00Z").getUTCDay()] : "");
+    const tPanjang = (d) => (d ? d.slice(8, 10) + " " + MONTHS_FULL[+d.slice(5, 7) - 1] + " " + d.slice(0, 4) : "");
+    let n = 0;
+    const baris = q.bahagian.map((b) => (b.tajuk ? '<tr><td></td><td class="lu-tajuk"><b><u>' + qtNl(b.tajuk) + "</u></b></td><td></td><td></td><td></td></tr>" : "") +
+      b.item.map((i) => '<tr><td></td><td><div class="q3-baris"><span>' + ++n + '.</span><span>' + qtNl(i.perkara) + (i.keterangan ? '<div class="lu-ket">' + qtNl(i.keterangan) + "</div>" : "") + "</span></div></td>" +
+        '<td class="c"><b>' + (i.kuantiti && i.kuantiti !== "1" ? esc(i.kuantiti) + (i.unit ? " " + esc(i.unit) : "") : "") + '</b></td><td class="r"><b>' + (i.kuantiti && i.kuantiti !== "1" ? rm(i.harga_sen).replace(/\.00$/, "") : "") + '</b></td><td class="r"><b>' + rm(i.jumlah_sen).replace(/\.00$/, "") + "</b></td></tr>").join("")).join("");
+    const untung = j.untung_sen ? '<tr><td></td><td></td><td></td><td></td><td class="r lu-kotak"><b>' + rm(j.kasar_sen) + "</b></td></tr>" +
+      '<tr><td></td><td><div class="q3-baris"><span>' + ++n + ".</span><span>" + esc(q.untungPeratus) + ' % dari nilai harga besar sebagai profit syarikat.</span></div></td><td></td><td></td><td class="r lu-kotak"><b>' + rm(j.untung_sen) + "</b></td></tr>" : "";
+    const acara = (q.acara || []).map((a) => '<tr><td></td><td><div class="q3-baris"><span>' + ++n + ".</span><span>Tarikh Acara Yang Telah Ditetapkan Untuk " + esc(a.tajuk || "Sesi Libat Urus") + " Iaitu Pada" +
+      '<table class="lu-acara"><tr><td>TARIKH:</td><td>' + esc(tPanjang(a.tarikh) || "—") + "</td></tr><tr><td>HARI:</td><td>" + esc(hari(a.tarikh) || "—") + "</td></tr>" + (a.masa ? "<tr><td>MASA:</td><td>" + esc(a.masa) + "</td></tr>" : "") +
+      (a.tempat ? "<tr><td>TEMPAT:</td><td>" + qtNl(a.tempat) + "</td></tr>" : "") + "</table></span></div></td><td></td><td></td><td></td></tr>").join("");
+    const syarat = q.syarat ? '<tr><td></td><td><div class="q3-baris"><span>' + ++n + ".</span><span><b>Terma Dan Syarat:</b><br>" + qtNl(q.syarat) + "</span></div></td><td></td><td></td><td></td></tr>" : "";
+    const pengenalan = '<tr><td></td><td>Berikut Adalah Perkara – Perkara Untuk Disertakan Berkaitan Dengan <b>“Sesi Libat Urus”.</b><br>Sesi Ini Adalah Seperti Berikut:<br><br><b>Tajuk Projek:</b><br><br><b>' + qtNl(q.pengenalan) + "</b>" +
+      (q.untuk ? "<br><b>Untuk:</b><br><br><b>" + qtNl(q.untuk) + "</b>" : "") + (q.rujukanDbkl ? "<br><br><b>NO RUJUKAN DBKL: <mark>" + esc(q.rujukanDbkl) + "</mark></b>" : "") + "</td><td></td><td></td><td></td></tr>";
+    return '<div class="quo">' +
+      '<div class="quo-kepala"><div><div class="quo-nama">' + esc(c.nama) + " <small>" + esc(c.noDaftar) + '</small></div><div class="quo-hq"><b>HEAD OFFICE:</b><br>' + c.alamat.map(esc).join("<br>") + "</div></div></div>" +
+      '<div class="q3-kontak"><div class="quo-contact"><b>CONTACT:</b><br>Tel: ' + esc(c.tel) + "<br>Email: " + c.emel.map(esc).join("<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;") + "</div>" +
+        '<table class="quo-kotak q3-kotak"><tr><th colspan="2">QUOTATION</th></tr><tr><td>Tarikh</td><td>' + esc(qtTarikhDot(q.tarikh)) + "</td></tr><tr><td>No.Quo. Invoice</td><td>" + esc(q.no_quo) + "</td></tr><tr><td>No. Ruj. Syarikat</td><td>" + esc(q.no_ruj) + "</td></tr></table></div>" +
+      '<table class="quo-pihak q3-pihak"><tr><th>Kepada</th><th>Hantar kepada</th><th>No. Akaun Syarikat</th></tr><tr><td><b>' + esc(q.pelanggan.nama) + "<br>" + qtNl(q.pelanggan.alamat) + "</b></td><td>" + qtNl(q.pelanggan.hantarKepada) + '</td><td class="c"><b>' + esc(c.bank) + "<br>" + esc(c.namaAkaun) + "</b></td></tr></table>" +
+      '<table class="quo-item q3-item"><thead><tr><th>Item</th><th>Perkara</th><th>Kuantiti</th><th>Harga/ Unit</th><th>Jumlah</th></tr></thead><tbody>' + pengenalan + baris + untung + acara + syarat + "</tbody></table>" +
+      '<table class="quo-ringkas q3-ringkas"><tr><td>POTONGAN HARGA</td><td>CUKAI</td><td>LAIN-LAIN PERKARA</td><td>JUMLAH</td><td class="r"><b>RM<br>' + rm(j.jumlah_sen) + "</b></td></tr>" +
+        "<tr><td><b>" + (j.potongan_sen ? "RM " + rm(j.potongan_sen) : "NIL") + "</b></td><td>" + (j.cukai_sen ? "RM " + rm(j.cukai_sen) : "") + '</td><td class="q3-besar" colspan="2"><b>JUMLAH BESAR</b></td><td class="r q3-besar"><b>RM<br>' + rm(j.besar_sen) + "</b></td></tr></table>" +
+      '<div class="q3-akhir">Sekian, terima kasih.<br>Hubungi Sri Cheras Enterprise untuk perkhidmatan terbaik<br>' + ttImg + "<b>(" + esc(c.penandatangan) + ")</b><br><b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + esc(c.jawatan) + "</b><br><br><br>Nota:<br><br>" +
+        "Saya ………………………………………… mewakili <b>" + esc(q.pelanggan.nama) + "</b> bersetuju untuk membenarkan pihak <b>SRI CHERAS ENTERPRISE</b> sebagai perunding / kontraktor dalam perkara berkaitan dengan <b>LIBAT URUS.</b>" +
+        "<br><br>NAMA:<br><br>JAWATAN:<br><br>SIGN:<br><br>COP SYARIKAT:<br><br>TARIKH:</div>" +
+      (q.status !== "MUKTAMAD" ? '<p class="slip-draf">DRAF: belum dimuktamadkan (tiada tandatangan)</p>' : "") + "</div>";
   }
 
   /* ---------- Cetakan Kaedah 3A (gaya sama dengan Comstra) ---------- */
@@ -2463,7 +2507,8 @@
   }
 
   /* ---------- Cetakan Kaedah 3B (gaya ringkas) ---------- */
-  function qtHtml3B(q, c, j, ttImg) {
+  function qtHtml3B(q, c, j, ttImg, o) {
+    o = o || {}; // SLU Parlimen: { tajukKotak, perkara, tanpaTajukPermohonan, tanpaPecah, tanpaTarikh }
     const rm = (sen) => qtRM(sen);
     const tsl = (iso) => (iso ? +iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : "");
     let r = 0;
@@ -2475,7 +2520,7 @@
       return '<tr><td class="c">' + (x.sub ? "" : QT_ROMAN[r++] || "") + "</td><td>" + qtNl(i.perkara) + (i.keterangan ? '<div class="quo-ket">' + qtNl(i.keterangan) + "</div>" : "") + '</td><td class="c">' + esc(i.kuantiti) + (i.unit ? " " + esc(i.unit) : "") +
         '</td><td class="q3b-rm"><span>RM</span><span>' + rm(i.harga_sen) + '</span></td><td class="q3b-rm"><span>RM</span><span>' + rm(i.jumlah_sen) + "</span></td></tr>";
     }).join("");
-    const blokTajuk = '<tr><td></td><td>Tajuk permohonan bagi cadangan pemasangan paparan iklan di tapak projek adalah seperti berikut:<br><br><b>' + qtNl(q.pengenalan) + "</b>" +
+    const blokTajuk = '<tr><td></td><td>' + (o.tanpaTajukPermohonan ? "" : "Tajuk permohonan bagi cadangan pemasangan paparan iklan di tapak projek adalah seperti berikut:<br><br>") + "<b>" + qtNl(q.pengenalan) + "</b>" +
       (q.untuk ? "<br><br><b>Untuk:<br>" + esc(q.untuk) + "</b>" : "") + (q.rujukanDbkl ? "<br><b>NO. RUJUKAN: &nbsp;&nbsp; " + esc(q.rujukanDbkl) + "</b>" : "") + "</td><td></td><td></td><td></td></tr>";
     const kerja = q.kerja ? '<tr><td class="c">' + (QT_ROMAN[r++] || "") + "</td><td>Kerja-kerja yang dijalankan turut merangkumi:<br>" + qtNl(q.kerja) + "</td><td></td><td></td><td></td></tr>" : "";
     const gm = (q.garisMasa || []).length ? '<tr><td class="c">' + (QT_ROMAN[r++] || "") + '</td><td>Garis masa projek adalah seperti berikut:<table class="q3b-gm"><tr><th>Perkara</th><th>Tarikh</th></tr>' +
@@ -2484,22 +2529,22 @@
       '<div class="q3b-kepala"><div class="q3b-nama">' + esc(c.nama) + '</div><div class="q3b-daftar">' + esc(c.noDaftar) + "<br>" + esc(c.tin || "") + "</div></div>" +
       '<div class="q3b-alamat"><b>Alamat:</b> ' + esc(c.alamatSebaris || c.alamat.join(" ")) + "<br><b>Tel. Pej.:</b> " + esc(c.telSebaris || c.tel) + " , <b>H/P:</b> " + esc(c.hpSebaris || "") + " &nbsp;|&nbsp; <b>Emel:</b> " + (c.emelKaedah || c.emel).map(esc).join(", ") + "</div>" +
       '<div class="q3b-pihak"><table class="q3b-kepada"><tr><td colspan="3"><u>Kepada</u></td></tr><tr><td>Nama</td><td>:</td><td>' + qtNl(q.pelanggan.nama) + "</td></tr><tr><td>Alamat</td><td>:</td><td>" + qtNl(q.pelanggan.alamat) + "</td></tr></table>" +
-        '<table class="q3b-kotak"><tr><th colspan="3">QUOTATION</th></tr><tr><td>Tarikh</td><td>:</td><td><b>' + esc(tsl(q.tarikh)) + "</b></td></tr><tr><td>No. Quo.</td><td>:</td><td><b>" + esc(q.no_quo) + "</b></td></tr><tr><td>Ruj. SCE</td><td>:</td><td><b>" + esc(q.no_ruj) + "</b></td></tr></table></div>" +
+        '<table class="q3b-kotak"><tr><th colspan="3">' + esc(o.tajukKotak || "QUOTATION") + '</th></tr><tr><td>Tarikh</td><td>:</td><td><b>' + esc(tsl(q.tarikh)) + "</b></td></tr><tr><td>No. Quo.</td><td>:</td><td><b>" + esc(q.no_quo) + "</b></td></tr><tr><td>Ruj. SCE</td><td>:</td><td><b>" + esc(q.no_ruj) + "</b></td></tr></table></div>" +
       '<table class="q3b-item"><thead><tr><th>ITEM</th><th>PERKARA</th><th>KUANTITI</th><th>HARGA/UNIT</th><th>JUMLAH</th></tr></thead><tbody>' + baris + blokTajuk + kerja + gm + "</tbody></table>" +
       '<table class="q3b-ringkas"><tr><td>Potongan Harga</td><td>Cukai</td><td>Lain-lain perkara</td><td class="r">Jumlah</td><td class="q3b-rm"><b>RM</b><b>' + rm(j.jumlah_sen) + "</b></td></tr>" +
         '<tr><td class="c">' + (j.potongan_sen ? rm(j.potongan_sen) : "-") + '</td><td class="r">' + (j.cukai_sen ? rm(j.cukai_sen) : "-") + '</td><td class="r">' + (j.lain_sen ? rm(j.lain_sen) : "-") + '</td><td class="r"><b>Jumlah Besar</b></td><td class="q3b-rm"><b>RM</b><b>' + rm(j.besar_sen) + "</b></td></tr></table>" +
-      '<div class="q3b-terma"><b><u>Terma &amp; Syarat:</u></b><br><i>' + qtNl(q.syarat) + "</i>" + (q.nota ? "<br><br><i>" + qtNl(q.nota) + "</i>" : "") + "</div>" +
+      '<div class="q3b-terma' + (o.tanpaPecah ? " q3b-sambung" : "") + '"><b><u>Terma &amp; Syarat:</u></b><br><i>' + qtNl(q.syarat) + "</i>" + (q.nota ? "<br><br><i>" + qtNl(q.nota) + "</i>" : "") + "</div>" +
       '<div class="q3b-akhir">Sekian, terima kasih.<br>' + ttImg + "(" + esc(c.penandatangan) + ")<br>" + esc(c.jawatan) + "</div>" +
       '<div class="q3b-sah">PENGESAHAN SEBUT HARGA SERTA TERMA &amp; SYARAT</div>' +
-      '<div class="q3b-setuju">Saya ......................................................... mewakili <b>' + esc(q.pelanggan.nama) + "</b> bersetuju untuk membenarkan pihak <b>SRI CHERAS ENTERPRISE</b> sebagai perunding / kontraktor dalam perkara berkaitan dengan <b>NOTIS PANDANGAN PENDUDUK SEKITAR (KAEDAH 3).</b>" +
-        '<table class="q3b-isi"><tr><td>Nama</td><td>:</td></tr><tr><td>Jawatan</td><td>:</td></tr><tr><td>Tandatangan</td><td>:</td></tr><tr><td>Cop Syarikat</td><td>:</td></tr><tr><td>&nbsp;</td><td></td></tr><tr><td>Tarikh</td><td>:</td></tr></table></div>' +
+      '<div class="q3b-setuju">Saya ......................................................... mewakili <b>' + esc(q.pelanggan.nama) + "</b> bersetuju untuk membenarkan pihak <b>SRI CHERAS ENTERPRISE</b> sebagai perunding / kontraktor dalam perkara berkaitan dengan <b>" + esc(o.perkara || "NOTIS PANDANGAN PENDUDUK SEKITAR (KAEDAH 3)") + ".</b>" +
+        '<table class="q3b-isi"><tr><td>Nama</td><td>:</td></tr><tr><td>Jawatan</td><td>:</td></tr><tr><td>Tandatangan</td><td>:</td></tr><tr><td>Cop Syarikat</td><td>:</td></tr>' + (o.tanpaTarikh ? "" : "<tr><td>&nbsp;</td><td></td></tr><tr><td>Tarikh</td><td>:</td></tr>") + "</table></div>" +
       (q.status !== "MUKTAMAD" ? '<p class="slip-draf">DRAF: belum dimuktamadkan (tiada tandatangan)</p>' : "") + "</div>";
   }
 
   function qtKosong(tpl) {
     const t = JSON.parse(JSON.stringify(tpl));
     t.bahagian.forEach((b) => b.item.forEach((i) => { i.kuantiti = String(i.kuantiti); i.harga = String(i.harga); }));
-    return Object.assign(t, { quo_id: "", version: "", status: "DRAF", tarikh: TODAY, no_quo: QT.cfg.cadanganNo, no_ruj: tpl.jenis === "KAEDAH_3A" || tpl.jenis === "KAEDAH_3B" ? "SCE/" + (tpl.jenis === "KAEDAH_3A" ? "R3A" : "R3B") + "/" + TODAY.slice(5, 7) + "/" + TODAY.slice(2, 4) + "/" : "SCE/CS/" + TODAY.slice(5, 7) + "/", pelanggan: { nama: "", alamat: "", hantarKepada: "" }, untuk: "", rujukanDbkl: "" });
+    return Object.assign(t, { quo_id: "", version: "", status: "DRAF", tarikh: TODAY, no_quo: QT.cfg.cadanganNo, no_ruj: tpl.jenis === "SLU_PARLIMEN" || tpl.jenis === "SLU_PEMBANTAH" ? "SCE/SLU/" + TODAY.slice(5, 7) + "/" + TODAY.slice(2, 4) + "/" : tpl.jenis === "KAEDAH_3A" || tpl.jenis === "KAEDAH_3B" ? "SCE/" + (tpl.jenis === "KAEDAH_3A" ? "R3A" : "R3B") + "/" + TODAY.slice(5, 7) + "/" + TODAY.slice(2, 4) + "/" : "SCE/CS/" + TODAY.slice(5, 7) + "/", pelanggan: { nama: "", alamat: "", hantarKepada: "" }, untuk: "", rujukanDbkl: "" });
   }
   async function qtBuka(id, salin) {
     try {
@@ -2518,7 +2563,7 @@
     openForm({ live: true, liveNota: "No. Rujukan disimpan dalam quotation bila anda tekan Simpan Draf.", title: "No. Rujukan SCE · Quotation", submit: "Guna nombor ini", fields: [
       { name: "no_ruj", label: "No. Rujukan SCE", full: true, maxlength: 60, value: e.no_ruj || "" }
     ], onSubmit: (v) => { QT.edit.no_ruj = v.no_ruj || ""; toast(v.no_ruj ? "No. Ruj. diisi: " + v.no_ruj + ". Tekan Simpan Draf." : "No. Ruj. dikosongkan."); refresh(); } });
-    rjPemilih(modal.querySelector("[name=no_ruj]"), () => ({ tetuan: (e.pelanggan && e.pelanggan.nama) || "", perkara: "Quotation " + (e.no_quo || ""), tarikh: e.tarikh || TODAY, siri: e.jenis === "KAEDAH_3A" ? "R3A" : e.jenis === "KAEDAH_3B" ? "R3B" : "CS" }));
+    rjPemilih(modal.querySelector("[name=no_ruj]"), () => ({ tetuan: (e.pelanggan && e.pelanggan.nama) || "", perkara: "Quotation " + (e.no_quo || ""), tarikh: e.tarikh || TODAY, siri: /^SLU_/.test(e.jenis) ? "SLU" : e.jenis === "KAEDAH_3A" ? "R3A" : e.jenis === "KAEDAH_3B" ? "R3B" : "CS" }));
   }
   function qtBaca() {
     const el = document.getElementById("quo-editor"); if (!el || !QT.edit) return;
@@ -2529,6 +2574,7 @@
     if (qtKaedah(e)) {
       e.garisMasa = [...el.querySelectorAll(".qt-gm")].map((g) => ({ perkara: g.querySelector("[data-g=perkara]").value, tarikh: g.querySelector("[data-g=tarikh]").value }));
       const tp = el.querySelector("[data-gm-pasang]"); if (tp) e._tarikhPasang = nilaiTarikh(tp);
+      if (el.querySelector(".qt-acara-senarai")) e.acara = [...el.querySelectorAll(".qt-acara")].map((a) => ({ tajuk: a.querySelector("[data-a=tajuk]").value, tarikh: nilaiTarikh(a.querySelector("[data-tarikh]")), masa: a.querySelector("[data-a=masa]").value, tempat: a.querySelector("[data-a=tempat]").value }));
     }
   }
   function qtKira(e) {
@@ -2576,14 +2622,14 @@
       '<section class="panel" id="quo-editor">' +
         '<h3 class="sub-head">Maklumat Quotation</h3><div class="form-grid">' + inp("no_quo", "No. Quo. / Invoice", e.no_quo) + inp("no_ruj", "No. Ruj. Syarikat", e.no_ruj) + (kunci ? "" : '<div class="field"><span>&nbsp;</span>' + btn("Pilih / Jana No. Rujukan SCE", "qt-ruj", "small") + "</div>") + tq("tarikh", "Tarikh", e.tarikh) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Pelanggan</h3><div class="form-grid">' + inp("pelanggan.nama", "Kepada (nama syarikat + no. pendaftaran)", e.pelanggan.nama) + ta("pelanggan.alamat", "Alamat", e.pelanggan.alamat, 2) + ta("pelanggan.hantarKepada", "Hantar kepada (pilihan)", e.pelanggan.hantarKepada, 2) + "</div>" +
-        '<h3 class="sub-head" style="margin-top:16px">Butiran Projek</h3><div class="form-grid">' + ta("pengenalan", qtKaedah(e) ? "Tajuk permohonan (cadangan pembangunan)" : "Pengenalan / cadangan pembangunan", e.pengenalan, 5) + inp("untuk", "UNTUK (Tetuan)", e.untuk) + inp("rujukanDbkl", "No. Rujukan DBKL", e.rujukanDbkl) + "</div>" +
+        '<h3 class="sub-head" style="margin-top:16px">Butiran Projek</h3><div class="form-grid">' + ta("pengenalan", /^SLU_/.test(e.jenis) ? "Tajuk projek / permohonan" : qtKaedah(e) ? "Tajuk permohonan (cadangan pembangunan)" : "Pengenalan / cadangan pembangunan", e.pengenalan, 5) + inp("untuk", "UNTUK (Tetuan)", e.untuk) + inp("rujukanDbkl", "No. Rujukan DBKL", e.rujukanDbkl) + "</div>" +
         '<h3 class="sub-head" style="margin-top:16px">Item</h3>' + bahagian + (kunci ? "" : '<div style="margin-top:8px"><select class="inline-select qt-pilih" data-qt-bahagian aria-label="Tambah bahagian"><option value="">+ Tambah bahagian…</option>' + qtBahagianTiada(e).map((b) => '<option value="t' + b.i + '">' + esc(b.tajuk) + "</option>").join("") + '<option value="kosong">Bahagian kosong (tulis sendiri)</option></select></div>') +
-        (qtKaedah(e) ? "" : '<h3 class="sub-head" style="margin-top:16px">Kos Pentadbiran (Untung)</h3><div class="form-grid">' + inp("untungPeratus", "Peratus daripada jumlah kasar (%)", e.untungPeratus, ' inputmode="decimal"') + ta("untungKeterangan", "Keterangan", e.untungKeterangan, 4) + "</div>") +
+        (qtTanpaUntung(e) ? "" : '<h3 class="sub-head" style="margin-top:16px">Kos Pentadbiran (Untung)</h3><div class="form-grid">' + inp("untungPeratus", "Peratus daripada jumlah kasar (%)", e.untungPeratus, ' inputmode="decimal"') + ta("untungKeterangan", "Keterangan", e.untungKeterangan, 4) + "</div>") +
         '<h3 class="sub-head" style="margin-top:16px">Pelarasan</h3><div class="form-grid">' + inp("potongan", "Potongan harga (RM)", e.potongan, ' inputmode="decimal"') + inp("cukai", "Cukai (RM)", e.cukai, ' inputmode="decimal"') + inp("lainLain", "Lain-lain perkara (RM)", e.lainLain, ' inputmode="decimal"') + "</div>" +
         (qtKaedah(e) ? qtEditorKaedah(e, kunci, dis, ta) + '<div hidden>' : "") + '<h3 class="sub-head" style="margin-top:16px">Terma dan Syarat</h3><div class="form-grid">' + inp("terma.bayaranPeratus", "Bayaran (%)", t.bayaranPeratus) + inp("terma.tempohHari", "Tempoh kerja (hari bekerja)", t.tempohHari) + tq("terma.tarikhAcara", "Tarikh acara", t.tarikhAcara) + inp("terma.masa", "Masa", t.masa) + ta("terma.tempat", "Tempat acara", t.tempat, 2) + ta("terma.lain", "Terma lain (pilihan)", t.lain, 2) + "</div>" + (qtKaedah(e) ? "</div>" : "") +
         '<div class="qt-resit" aria-label="Ringkasan jumlah">' +
           qtR("", "Jumlah kasar (semua item)", "kasar", k.kasar) +
-          (qtKaedah(e) ? "" : qtR("+", 'Kos pentadbiran (<span data-t="pct">' + esc(String(k.pct)) + "</span>%)", "untung", k.untung)) +
+          (qtTanpaUntung(e) ? "" : qtR("+", 'Kos pentadbiran (<span data-t="pct">' + esc(String(k.pct)) + "</span>%)", "untung", k.untung)) +
           qtR("=", "Jumlah", "jumlah", k.jumlah, "sub") +
           qtR("−", "Potongan harga", "pot", k.pot) +
           qtR("+", "Cukai", "cuk", k.cuk) +
@@ -2597,7 +2643,7 @@
   }
   async function qtSimpan() {
     qtBaca(); const e = QT.edit;
-    const data = { jenis: e.jenis, tarikh: e.tarikh, no_quo: e.no_quo, no_ruj: e.no_ruj, pelanggan: e.pelanggan, pengenalan: e.pengenalan, untuk: e.untuk, rujukanDbkl: e.rujukanDbkl, bahagian: e.bahagian, untungPeratus: e.untungPeratus, untungKeterangan: e.untungKeterangan, garisMasa: e.garisMasa || [], kerja: e.kerja || "", syarat: e.syarat || "", nota: e.nota || "", potongan: e.potongan, cukai: e.cukai, lainLain: e.lainLain, terma: e.terma };
+    const data = { jenis: e.jenis, tarikh: e.tarikh, no_quo: e.no_quo, no_ruj: e.no_ruj, pelanggan: e.pelanggan, pengenalan: e.pengenalan, untuk: e.untuk, rujukanDbkl: e.rujukanDbkl, bahagian: e.bahagian, untungPeratus: e.untungPeratus, untungKeterangan: e.untungKeterangan, garisMasa: e.garisMasa || [], acara: e.acara || [], kerja: e.kerja || "", syarat: e.syarat || "", nota: e.nota || "", potongan: e.potongan, cukai: e.cukai, lainLain: e.lainLain, terma: e.terma };
     try { const o = await LIVE.api("quo.save", { quo_id: e.quo_id, version: e.version, data: data }); toast("Quotation disimpan."); QT.list = null; await qtBuka(o.quo_id); qtLoad(); }
     catch (x) { toast(x.message); }
   }
@@ -2631,7 +2677,9 @@
       (t.tempohHari ? "<br>Jangkamasa tempoh kerja dalam " + esc(t.tempohHari) + " hari bekerja." : "") +
       (t.tarikhAcara ? "<br>Tarikh Acara Yang Telah Ditetapkan pada<br><table class='quo-acara'><tr><td>TARIKH:</td><td>" + esc(tarikhPanjang(t.tarikhAcara)) + "</td></tr><tr><td>HARI:</td><td>" + esc(hariMs(t.tarikhAcara)) + "</td></tr>" + (t.masa ? "<tr><td>MASA:</td><td>" + esc(t.masa) + "</td></tr>" : "") + (t.tempat ? "<tr><td>TEMPAT:</td><td>" + qtNl(t.tempat) + "</td></tr>" : "") + "</table>" : "") +
       (t.lain ? "<br>" + qtNl(t.lain) : "") + "</div>";
-    const htmlKaedah = q.jenis === "KAEDAH_3A" ? qtHtml3A(q, c, j, ttImg) : q.jenis === "KAEDAH_3B" ? qtHtml3B(q, c, j, ttImg) : "";
+    const htmlKaedah = q.jenis === "KAEDAH_3A" ? qtHtml3A(q, c, j, ttImg) : q.jenis === "KAEDAH_3B" ? qtHtml3B(q, c, j, ttImg) :
+      q.jenis === "SLU_PARLIMEN" ? qtHtml3B(q, c, j, ttImg, { tajukKotak: "QUOTATION & INVOICE", perkara: "SESI LIBAT URUS", tanpaTajukPermohonan: true, tanpaPecah: true, tanpaTarikh: true }) :
+      q.jenis === "SLU_PEMBANTAH" ? qtHtmlLU(q, c, j, ttImg) : "";
     const html = htmlKaedah || ('<div class="quo">' +
       '<div class="quo-kepala"><div><div class="quo-nama">' + esc(c.nama) + " " + esc(c.noDaftar) + '</div><div class="quo-hq"><b>HEAD OFFICE:</b><br>' + c.alamat.map(esc).join("<br>") + "</div></div>" +
         '<table class="quo-kotak"><tr><th colspan="2">QUOTATION</th></tr><tr><td>Tarikh</td><td>' + esc(qtTarikhDot(q.tarikh)) + "</td></tr><tr><td>No.Quo. Invoice</td><td>" + esc(q.no_quo) + "</td></tr><tr><td>No. Ruj. Syarikat</td><td>" + esc(q.no_ruj) + "</td></tr></table></div>" +
@@ -2649,7 +2697,7 @@
     let area = document.getElementById("print-area");
     if (!area) { area = document.createElement("div"); area.id = "print-area"; document.body.appendChild(area); }
     area.innerHTML = html;
-    openInfo({ title: "Pratonton: " + q.no_quo, body: '<div class="slip-pratonton">' + html + "</div>" + (o.tandatanganRalat ? note(o.tandatanganRalat) : "") + note("Klik Cetak, kemudian pilih 'Save as PDF'. Nama fail cadangan: QUOTATION " + (q.jenis === "COMSTRA" ? "COMM. STRATEGY" : q.jenis === "KAEDAH_3A" ? "KAEDAH 3A" : q.jenis === "KAEDAH_3B" ? "KAEDAH 3B" : q.jenis) + " " + (/^TETUAN\b/i.test(q.pelanggan.nama || "") ? "" : "TETUAN ") + String(q.pelanggan.nama || "").toUpperCase()), actions: btn("Cetak / Simpan PDF", "gj-print", "primary") });
+    openInfo({ title: "Pratonton: " + q.no_quo, body: '<div class="slip-pratonton">' + html + "</div>" + (o.tandatanganRalat ? note(o.tandatanganRalat) : "") + note("Klik Cetak, kemudian pilih 'Save as PDF'. Nama fail cadangan: QUOTATION " + (q.jenis === "COMSTRA" ? "COMM. STRATEGY" : q.jenis === "KAEDAH_3A" ? "KAEDAH 3A" : q.jenis === "KAEDAH_3B" ? "KAEDAH 3B" : q.jenis === "SLU_PARLIMEN" ? "SESI LIBAT URUS DENGAN PARLIMEN" : q.jenis === "SLU_PEMBANTAH" ? "SESI LIBAT URUS DENGAN PEMBANTAH" : q.jenis) + " " + (/^TETUAN\b/i.test(q.pelanggan.nama || "") ? "" : "TETUAN ") + String(q.pelanggan.nama || "").toUpperCase()), actions: btn("Cetak / Simpan PDF", "gj-print", "primary") });
     modal.classList.add("modal-slip"); modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true });
   }
   function qtTandatangan() {
@@ -3097,6 +3145,8 @@
     "qt-reload"() { qtReload(); },
     "qt-baru"() { qtPilihTemplat(); },
     "qt-gm-kira"() { qtBaca(); const D = QT.edit._tarikhPasang; if (!D) { toast("Isi tarikh pemasangan signboard dahulu (hh/bb/tttt)."); return; } qtKiraTarikh(QT.edit, D); toast("Tarikh dikira. Semak dan ubah jika perlu."); refresh(); },
+    "qt-acara-tambah"() { qtBaca(); (QT.edit.acara = QT.edit.acara || []).push({ tajuk: "Sesi Libat Urus " + ["Pertama", "Kedua", "Ketiga", "Keempat", "Kelima"][QT.edit.acara.length] || "", tarikh: "", masa: "", tempat: "" }); refresh(); },
+    "qt-acara-buang"(el) { qtBaca(); QT.edit.acara.splice(+el.dataset.i, 1); refresh(); },
     "qt-gm-tambah"() { qtBaca(); (QT.edit.garisMasa = QT.edit.garisMasa || []).push({ perkara: "", tarikh: "" }); refresh(); },
     "qt-gm-buang"(el) { qtBaca(); QT.edit.garisMasa.splice(+el.dataset.i, 1); refresh(); },
     "qt-buka"(el) { qtBuka(el.dataset.id); },
