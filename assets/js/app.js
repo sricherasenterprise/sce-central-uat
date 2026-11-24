@@ -1121,7 +1121,7 @@
   function viewDbklLive() {
     const gate = liveGate("order"); if (gate) return pageHead("DBKL Advertising", "Order signboard Kaedah 3A dan 3B.") + gate;
     const all = LD.order;
-    return pageHead("DBKL Advertising", "Order signboard Kaedah 3A dan 3B dengan checklist 10 langkah. " + liveStamp("order"), liveTag) +
+    return pageHead("DBKL Advertising", "Order signboard Kaedah 3A dan 3B dengan checklist 10 langkah. " + liveStamp("order"), btn("Keratan Akhbar", "akh-borang") + " " + liveTag) +
       note("Kaedah 3B: langkah 8 (Iklan Akhbar) automatik N/A. Butiran proses lain belum disahkan dan kekal boleh ubah.") +
       '<section class="panel" style="margin-top:16px">' + panelHead("Order Signboard", all.length + " order", "", liveTag) + table([
         { h: "ID Order", r: (o) => '<button type="button" class="text-link tnum" data-action="live-order" data-id="' + esc(o.id) + '">' + esc(o.id) + "</button>" },
@@ -1140,7 +1140,7 @@
       '<ol class="checklist">' + o.langkah.map((l) => '<li class="cl-' + l.status + '"><span>' + esc(l.nama) + "</span>" + '<span class="badge ' + LANGKAH_TONE[l.status] + '">' + (l.status === "siap" ? esc(l.tarikh) : l.status === "na" ? "N/A" : "Belum") + "</span></li>").join("") + "</ol>" +
       note("Rekod sebenar, baca sahaja. Tanda langkah dibuat dalam Portal Staf dashboard operasi sedia ada.") +
       '<h3 class="sub-head" style="margin-top:16px">Gambar Signboard</h3><div id="galeri-foto" data-order="' + esc(o.id) + '"><p class="small muted" role="status">Memuatkan gambar…</p></div>',
-      actions: btn("+ Tambah Gambar", "foto-tambah", "primary", ' data-id="' + esc(o.id) + '"') });
+      actions: btn("Keratan Akhbar", "akh-borang", "", ' data-tetuan="' + esc(o.tetuan || "") + '" data-jprb="' + esc(o.rujukanJprb || "") + '"') + " " + btn("+ Tambah Gambar", "foto-tambah", "primary", ' data-id="' + esc(o.id) + '"') });
     fotoMuat(o.id);
   }
 
@@ -1708,6 +1708,61 @@
       rjReload();
     } });
     pjPemilih(modal.querySelector("[name=projek]"));
+  }
+
+  /* ========== Halaman Keratan Akhbar (The Sun, Utusan, Nanyang), 24/11/2026 ========== */
+  /* Ikut template "THE SUN, UM DAN NANYANG …docx": satu halaman A4 bagi setiap akhbar × hari; kepala 4 baris + kotak biru untuk tampal keratan.
+   * Hari Ahad: THE SUN → THE SUN ON SUNDAY, UTUSAN MALAYSIA → MINGGUAN MALAYSIA. The Sun guna tarikh Inggeris (03RD OCTOBER 2026). */
+  const AKH_BULAN_EN = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+  const AKHBAR = {
+    SUN: { nama: (ahad) => (ahad ? "THE SUN ON SUNDAY" : "THE SUN"), label: "DATE", en: true },
+    UM: { nama: (ahad) => (ahad ? "MINGGUAN MALAYSIA" : "UTUSAN MALAYSIA"), label: "TARIKH", en: false },
+    NSP: { nama: () => "NANYANG SIANG PAU", label: "TARIKH", en: false }
+  };
+  const akhAkhiran = (h) => (h % 100 >= 11 && h % 100 <= 13 ? "TH" : ["TH", "ST", "ND", "RD"][h % 10] || "TH");
+  function akhTarikh(iso, en) {
+    const [y, m, d] = iso.split("-").map(Number);
+    return en ? String(d).padStart(2, "0") + "<sup>" + akhAkhiran(d) + "</sup> " + AKH_BULAN_EN[m - 1] + " " + y : String(d).padStart(2, "0") + " " + MONTHS_FULL[m - 1].toUpperCase() + " " + y;
+  }
+  function akhHalaman(v) {
+    const hari = Math.max(1, Math.min(7, Number(v.hari) || 3)), tarikh = [];
+    for (let i = 0; i < hari; i++) { const d = new Date(v.tarikh + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + i); tarikh.push(d.toISOString().slice(0, 10)); }
+    const tetuan = String(v.tetuan || "").trim().toUpperCase(), ruj = String(v.jprb || "").trim().toUpperCase();
+    const halaman = [];
+    (v.akhbar || []).forEach((k) => {
+      const a = AKHBAR[k]; if (!a) return;
+      tarikh.forEach((t) => {
+        const ahad = new Date(t + "T00:00:00Z").getUTCDay() === 0;
+        halaman.push('<section class="akh-hal"><div class="akh-kepala">' + esc(a.nama(ahad)) + "<br>NO RUJUKAN JPRB : " + esc(ruj) + "<br>" + a.label + " : " + akhTarikh(t, a.en) +
+          "<br>" + esc(/^TETUAN\b/.test(tetuan) ? tetuan : "TETUAN " + tetuan) + '</div><div class="akh-kotak"></div></section>');
+      });
+    });
+    return '<div class="akh">' + halaman.join("") + "</div>";
+  }
+  /** Borang keratan akhbar. pra: { tetuan, jprb } (dari order / projek). */
+  function akhBorang(pra) {
+    pra = pra || {};
+    const jprb = String(pra.jprb || "").replace(/^DBKL[.\s]*JPRB[.\s]*/i, "").trim();
+    openForm({ live: true, liveNota: "Tiada apa disimpan. Halaman dijana untuk dicetak / Save as PDF sahaja.", title: "Halaman Keratan Akhbar", submit: "Jana halaman", fields: [
+      { name: "tetuan", label: "Tetuan", required: true, full: true, maxlength: 150, value: pra.tetuan || "" },
+      { name: "jprb", label: "No. Rujukan JPRB (contoh 5327/2026)", required: true, maxlength: 60, value: jprb },
+      { name: "tarikh", label: "Tarikh iklan pertama", type: "date", required: true, value: pra.tarikh || "" },
+      { name: "hari", label: "Bilangan hari berturut-turut", type: "select", options: [["3", "3 hari"], ["2", "2 hari"], ["1", "1 hari"]], value: "3" },
+      { name: "akhbar", label: "Akhbar", type: "multiselect", full: true, options: [["SUN", "The Sun (BI)"], ["UM", "Utusan Malaysia (BM)"], ["NSP", "Nanyang Siang Pau (BC)"]] }
+    ], onSubmit: (v) => {
+      if (!v.tarikh) { toast("Sila isi tarikh iklan pertama."); return; }
+      if (!v.akhbar || !v.akhbar.length) v.akhbar = ["SUN", "UM", "NSP"];
+      const html = akhHalaman(v);
+      let area = document.getElementById("print-area");
+      if (!area) { area = document.createElement("div"); area.id = "print-area"; document.body.appendChild(area); }
+      area.innerHTML = html;
+      const n = (html.match(/akh-hal/g) || []).length;
+      const namaFail = "THE SUN, UM DAN NANYANG " + String(v.tetuan || "").toUpperCase().replace(/^TETUAN\s+/, "") + " " + isoKeHbt(v.tarikh).replace(/\//g, ".");
+      openInfo({ title: "Keratan Akhbar · " + n + " halaman", body: '<div class="slip-pratonton akh-pratonton">' + html + "</div>" + note("Klik Cetak, kemudian pilih 'Save as PDF' atau pencetak. Nama fail cadangan: " + namaFail),
+        actions: btn("Cetak / Simpan PDF", "gj-print", "primary") });
+      modal.classList.add("modal-slip"); setTimeout(() => modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true }), 0);
+    } });
+    const sel = modal.querySelector("[name=akhbar]"); if (sel) [...sel.options].forEach((o) => { o.selected = true; });
   }
 
   /* ========== Pusat Dokumen (pautan Canva / Google Drive / lain) ========== */
@@ -3199,6 +3254,7 @@
     "pj-tapis"(el) { const t = el.dataset.tapis; state.filters["pj.status"] = t === "Selesai" ? "Selesai" : "Aktif"; state.filters["pj.jenis"] = t === "Signboard" ? "Signboard" : "Semua"; refresh(); },
     "st-foto"(el) { stFotoTukar(el.dataset.emel); },
     "st-foto-buang"(el) { stFotoBuang(el.dataset.emel); },
+    "akh-borang"(el) { akhBorang({ tetuan: el.dataset.tetuan || "", jprb: el.dataset.jprb || "" }); },
     "rj-reload"() { rjReload(); },
     "rj-jana"() { rjJanaBorang(null); },
     "rj-buka"(el) { rjBuka(el.dataset.id); },

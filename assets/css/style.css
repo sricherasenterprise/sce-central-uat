@@ -765,3 +765,59 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
 .avatar-foto { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 .person-aksi { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .person .avatar { flex: none; }
+
+/* Halaman Keratan Akhbar (24/11/2026): ukuran ikut template Word (A4; kepala 16pt; kotak biru 161 × 229 mm) */
+.akh-hal { position: relative; container-type: inline-size; width: 100%; aspect-ratio: 210 / 297; background: #fff; color: #000; font-family: Calibri, Carlito, "Segoe UI", Arial, sans-serif; }
+.akh-kepala { position: absolute; top: 4.6%; left: 0; right: 0; text-align: center; font-weight: 700; font-size: 2.69cqw; line-height: 1.12; }
+.akh-kepala sup { font-size: .62em; vertical-align: .55em; line-height: 0; }
+.akh-kotak { position: absolute; left: 13.8%; width: 76.7%; top: 13.5%; height: 77.1%; border: .5cqw solid #0070C0; box-sizing: border-box; }
+.akh-pratonton .akh-hal { border: 1px solid #ccc; margin: 0 auto 14px; max-width: 520px; }
+@media print {
+  @page akhbar { size: A4; margin: 0; }
+  #print-area .akh-hal { page: akhbar; width: 210mm; height: 297mm; aspect-ratio: auto; break-after: page; }
+  #print-area .akh-hal:last-child { break-after: auto; }
+  /* Kekalkan warna latar (kotak QUOTATION kuning, tajuk jadual, serlahan tarikh) walaupun "Background graphics" tidak ditanda */
+  #print-area, #print-area * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
+
+/* Cetakan quotation gaya Word (Comstra, Kaedah 3A, SLU Pembantah) ikut template asal: Century Gothic, warna coklat, margin ~18mm (24/11/2026) */
+.quo:not(.q3b) { font-family: "Century Gothic", "URW Gothic", "Avant Garde", Futura, Arial, sans-serif; font-size: 10.5pt; line-height: 1.3; }
+.quo:not(.q3b) .quo-nama { font-size: 24pt; font-weight: 700; color: #974806; text-shadow: 1px 1px 2px rgba(0, 0, 0, .35); letter-spacing: -.3px; }
+.quo:not(.q3b) .quo-nama small { font-size: 11pt; font-weight: 400; color: #974806; text-shadow: none; letter-spacing: 0; }
+.quo:not(.q3b) .quo-hq, .quo:not(.q3b) .quo-contact { color: #974806; font-size: 10pt; margin-top: 6px; }
+.quo:not(.q3b) .quo-hq b, .quo:not(.q3b) .quo-contact b { color: #974806; }
+.quo:not(.q3b) .quo-contact { margin-top: 0; }
+.quo:not(.q3b) .q3-alamat { gap: 80px; }
+.quo:not(.q3b) .q3-kontak { margin-top: 14px; border-top: 2px solid #d9c27a; padding-top: 6px; }
+.quo:not(.q3b) .q3-kotak { min-width: 330px; border: 1px solid #333; }
+.quo:not(.q3b) .q3-kotak th { font: 700 22pt/1.1 "Century Gothic", Arial, sans-serif; letter-spacing: 0; padding: 4px 6px; }
+.quo:not(.q3b) .q3-kotak td { font-size: 10pt; padding: 2px 8px; border: 1px solid #333; }
+.quo:not(.q3b) .q3-pihak { margin-top: 14px; }
+.quo:not(.q3b) .q3-pihak th { font-weight: 400; font-size: 10.5pt; padding: 6px; }
+.quo:not(.q3b) .q3-pihak td { font-size: 10.5pt; padding: 14px 8px; vertical-align: middle; border: 1px solid #555; }
+.quo:not(.q3b) .q3-item { margin-top: 16px; }
+.quo:not(.q3b) .q3-item th { font-weight: 700; font-size: 10pt; padding: 7px 6px; border: 1px solid #555; }
+.quo:not(.q3b) .q3-item td { font-size: 10.5pt; padding: 5px 8px; }
+.quo:not(.q3b) .q3-item td:first-child { width: 7%; }
+.quo:not(.q3b) .q3-item td:nth-child(3), .quo:not(.q3b) .q3-item td:nth-child(4) { width: 11%; }
+.quo:not(.q3b) .q3-item td:nth-child(5) { width: 13%; }
+.quo:not(.q3b) .q3-baris { grid-template-columns: 32px 1fr; text-align: justify; }
+.quo:not(.q3b) .q3-ringkas td { font-size: 10pt; padding: 5px 6px; border: 1px solid #555; }
+.quo:not(.q3b) .q3-akhir { font-size: 10.5pt; }
+@media print {
+  @page quo { size: A4; margin: 14mm 14mm 14mm 14mm; }
+  #print-area .quo { page: quo; }
+  #print-area .q3-item tr, #print-area .q3b-item tr { break-inside: avoid; }
+}
+.quo:not(.q3b) .q3-pihak { table-layout: fixed; } .quo:not(.q3b) .q3-pihak td { width: auto; } .quo:not(.q3b) .q3-pihak th:nth-child(1) { width: 50%; } .quo:not(.q3b) .q3-pihak th:nth-child(2) { width: 17%; } .quo:not(.q3b) .q3-pihak th:nth-child(3) { width: 33%; }
+.quo:not(.q3b) .q3-pihak td:nth-child(3) { text-align: center; }
+.quo:not(.q3b) .q3-blok { text-align: justify; }
+/* 3B ikut template: tajuk garis masa hitam, nombor kanan, kuantiti tengah */
+.q3b-item .q3b-gm th { color: #000; background: #fad7b5; padding: 1px 4px; font-weight: 700; }
+.q3b-item td.c, .q3b-ringkas td.c { text-align: center; }
+.q3b-item td.q3b-rm, .q3b-ringkas td.q3b-rm { min-width: 105px; }
+.q3b-rm { display: table-cell; }
+.q3b-item td.q3b-rm span:first-child, .q3b-ringkas td.q3b-rm b:first-child { float: left; margin-right: 0; }
+.q3b-item td.q3b-rm span:last-child, .q3b-ringkas td.q3b-rm b:last-child { float: right; }
+.q3b-gm td.c { text-align: center; }
+.q3-item .lu-acara { border-collapse: collapse; } .q3-item .lu-acara td { border: 0; padding: 1px 10px 1px 0; }
