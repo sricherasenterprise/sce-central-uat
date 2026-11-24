@@ -1118,38 +1118,77 @@
   }
 
   /* ========== Fail Signboard DEV (24/11/2026): ganti ORDER SIGNBOARD produksi + checklist 10 langkah ========== */
+  /* 25/11/2026: kelengkapan (Gambar / Laman Web DBKL / Keratan Akhbar), dokumen dalam fail, Jana Laporan Gambar (ganti pptx). */
   const SB_TONE = { AKTIF: "info", SELESAI: "good" };
   const sbBadge = (o) => badge(o.status === "SELESAI" ? "Selesai" : "Aktif", SB_TONE[o.status] || "info");
+  const sbRef = (o) => "ORD-" + pjSlug(o.id);
+  /** Tiga penanda kelengkapan. ok = ada, kosong = belum, na = tidak perlu (3B: akhbar). */
+  function sbTanda(o, panjang) {
+    const l = o.lengkap; if (!l) return '<span class="muted small">—</span>';
+    const t = (nama, n) => '<span class="sb-tanda ' + (n === null ? "na" : n > 0 ? "ok" : "belum") + '" title="' + esc(nama + ": " + (n === null ? "tidak perlu (3B)" : n > 0 ? n + " ada" : "belum ada")) + '">' +
+      (n === null ? "–" : n > 0 ? "✓" : "○") + " " + esc(panjang ? nama : nama.split(" ")[0]) + "</span>";
+    return '<span class="sb-tanda-baris">' + t("Gambar", l.gambar) + t("Laman Web", l.lamanWeb) + t("Akhbar", l.akhbar) + "</span>";
+  }
+  /** Muat semula senarai fail tanpa mengosongkan paparan, kemudian jalankan `lepas`. */
+  function sbSegar(lepas) {
+    LIVE.api("ops.signboard.list").then((o) => { LD.order = o.order; LD.sbPadam = !!o.bolehPadam; LD.at.order = o.dikemasKini; if (currentRoute() === "dbkl") refresh(); if (lepas) lepas(); })
+      .catch((e) => toast(e.message || "Gagal memuat semula."));
+  }
   function viewDbklLive() {
     const gate = liveGate("order"); if (gate) return pageHead("DBKL Signboard", "Fail signboard Kaedah 3A dan 3B.") + gate;
     if (!f("sb.st")) state.filters["sb.st"] = "Semua";
     const kata = f("sb.q").toLowerCase().split(/\s+/).filter(Boolean), st = f("sb.st");
-    const all = LD.order.filter((o) => (st === "Semua" || (st === "Aktif" ? o.status !== "SELESAI" : o.status === "SELESAI")) &&
+    const belumLengkap = (o) => o.lengkap && (!o.lengkap.gambar || !o.lengkap.lamanWeb || o.lengkap.akhbar === 0);
+    const all = LD.order.filter((o) => (st === "Semua" || (st === "Aktif" ? o.status !== "SELESAI" : st === "Selesai" ? o.status === "SELESAI" : belumLengkap(o))) &&
       kata.every((w) => [o.id, o.tetuan, o.rujukanJprb, o.kaedah, o.lokasi, o.tajuk].join(" ").toLowerCase().includes(w)));
-    return pageHead("DBKL Signboard", "Satu fail untuk setiap signboard: gambar, dokumen, keratan akhbar dan quotation di satu tempat. " + liveStamp("order"),
+    return pageHead("DBKL Signboard", "Satu fail untuk setiap signboard: gambar, PDF laman web DBKL dan keratan akhbar di satu tempat. " + liveStamp("order"),
       btn("Keratan Akhbar", "akh-borang") + " " + btn("+ Fail Signboard", "sb-borang", "primary")) +
-      '<div class="toolbar">' + searchBox("sb.q", "Cari Tetuan, JPRB, tajuk") + chips("sb.st", ["Semua", "Aktif", "Selesai"]) + "</div>" +
+      '<div class="toolbar">' + searchBox("sb.q", "Cari Tetuan, JPRB, tajuk") + chips("sb.st", ["Semua", "Aktif", "Selesai", "Belum lengkap"]) + "</div>" +
       '<section class="panel">' + panelHead("Fail Signboard", all.length + " daripada " + LD.order.length + " fail", "", liveTagDev) + table([
         { h: "ID", r: (o) => '<button type="button" class="text-link tnum" data-action="live-order" data-id="' + esc(o.id) + '">' + esc(o.id) + "</button>" },
         { h: "Tarikh pasang", r: (o) => '<span class="tnum">' + esc(o.tarikhOrder || "—") + "</span>" },
         { h: "Tetuan", r: (o) => esc(o.tetuan || "—") },
         { h: "JPRB", r: (o) => esc(o.rujukanJprb || "—") },
         { h: "Kaedah", r: (o) => esc(o.kaedah || "—") },
+        { h: "Kelengkapan", r: (o) => sbTanda(o) },
         { h: "Status", r: (o) => sbBadge(o) }
       ], all, empty(LD.order.length ? "Tiada fail sepadan." : "Belum ada fail signboard. Klik + Fail Signboard untuk mula.")) + "</section>";
   }
   function openLiveOrder(id) {
     const o = (LD.order || []).find((x) => x.id === id); if (!o) return;
-    const ref = "ORD-" + pjSlug(o.id);
+    if (!LD.program && !LD.err.program) liveLoad("program"); // perlu untuk pautan dokumen ke projek
+    const butangDok = (kat, label) => btn(label, "sb-dok", "small", ' data-id="' + esc(o.id) + '" data-kat="' + esc(kat) + '"');
     openInfo({ title: o.id + " · " + (o.tetuan || ""), body: detailList([["Tetuan", esc(o.tetuan || "—")], ["No. Rujukan JPRB", esc(o.rujukanJprb || "—")], ["Kaedah", esc(o.kaedah || "—")],
-        ["Tarikh pasang", esc(o.tarikhOrder || "—")], ["Lokasi", esc(o.lokasi || "—")], ["Status", sbBadge(o)], ["Didaftar oleh", esc(o.staf || "—")]]) +
+        ["Tarikh pasang", esc(o.tarikhOrder || "—")], ["Lokasi", esc(o.lokasi || "—")], ["Status", sbBadge(o)], ["Kelengkapan", sbTanda(o, true)], ["Didaftar oleh", esc(o.staf || "—")]]) +
       (o.tajuk ? '<p class="sub-head" style="margin-top:12px">Tajuk projek</p><p class="small" style="white-space:pre-line">' + esc(o.tajuk) + "</p>" : "") +
       (o.catatan ? '<p class="sub-head" style="margin-top:12px">Catatan</p><p class="small" style="white-space:pre-line">' + esc(o.catatan) + "</p>" : "") +
-      '<p class="small" style="margin-top:12px">' + btn("Buka projek (dokumen & tugasan)", "sb-projek", "", ' data-ref="' + esc(ref) + '"') + " " + btn("Sunting", "sb-borang", "", ' data-id="' + esc(o.id) + '"') +
+      '<p class="small" style="margin-top:12px">' + btn("Sunting", "sb-borang", "", ' data-id="' + esc(o.id) + '"') + " " + btn("Buka projek (tugasan)", "sb-projek", "", ' data-ref="' + esc(sbRef(o)) + '"') +
       (LD.sbPadam ? " " + btn("Padam fail", "sb-padam", "danger", ' data-id="' + esc(o.id) + '"') : "") + "</p>" +
+      '<h3 class="sub-head" style="margin-top:16px">Dokumen (PDF)</h3><div id="sb-dok" data-ref="' + esc(sbRef(o)) + '"><p class="small muted" role="status">Memuatkan dokumen…</p></div>' +
+      '<p class="small" style="margin-top:8px">' + butangDok("Signboard Laman Web", "+ PDF Laman Web DBKL") + (o.kaedah === "3B" ? "" : " " + butangDok("Keratan Akhbar", "+ PDF Keratan Akhbar")) + "</p>" +
       '<h3 class="sub-head" style="margin-top:16px">Gambar Signboard</h3><div id="galeri-foto" data-order="' + esc(o.id) + '"><p class="small muted" role="status">Memuatkan gambar…</p></div>',
-      actions: btn("Keratan Akhbar", "akh-borang", "", ' data-tetuan="' + esc(o.tetuan || "") + '" data-jprb="' + esc(o.rujukanJprb || "") + '" data-tarikh="' + esc(o.tarikhPasang || "") + '"') + " " + btn("+ Tambah Gambar", "foto-tambah", "primary", ' data-id="' + esc(o.id) + '"') });
+      actions: btn("Jana Laporan Gambar", "sb-laporan", "", ' data-id="' + esc(o.id) + '"') + " " + (o.kaedah === "3B" ? "" : btn("Keratan Akhbar", "akh-borang", "", ' data-tetuan="' + esc(o.tetuan || "") + '" data-jprb="' + esc(o.rujukanJprb || "") + '" data-tarikh="' + esc(o.tarikhPasang || "") + '"') + " ") +
+        btn("+ Tambah Gambar", "foto-tambah", "primary", ' data-id="' + esc(o.id) + '"') });
     fotoMuat(o.id);
+    sbDokMuat(sbRef(o));
+  }
+  /** Senarai dokumen fail (Documents, rujukan PROJEK = ORD-<id>). Tunggu DK.list jika belum dimuat. */
+  function sbDokMuat(ref, cubaan) {
+    const el = document.querySelector('#sb-dok[data-ref="' + ref + '"]'); if (!el) return;
+    if (DK.err) { el.innerHTML = '<p class="small muted">' + esc(DK.err) + "</p>"; return; }
+    if (!DK.list) { dkLoad(); if ((cubaan || 0) < 40) setTimeout(() => sbDokMuat(ref, (cubaan || 0) + 1), 500); return; }
+    const docs = DK.list.filter((d) => d.rujukan_jenis === "PROJEK" && d.rujukan === ref && !d.tersembunyi);
+    el.innerHTML = docs.length ? '<ul class="live-list">' + docs.map((d) => '<li><button type="button" class="text-link" data-action="dk-lihat" data-id="' + esc(d.doc_id) + '">' + esc(d.tajuk) + "</button><span>" + esc(d.kategori) +
+      (d.jenis === "PDF" && d.saiz_bait ? " · " + esc(dkSaiz(d.saiz_bait)) : "") + '</span><span class="muted small">' + esc(namaPapar(d.oleh || "")) + " · " + esc(dkTarikh(d.updated_at || d.created_at)) + "</span></li>").join("") + "</ul>"
+      : '<p class="small muted">Belum ada PDF. Muat naik PDF laman web DBKL' + (ref && (LD.order || []).some((x) => sbRef(x) === ref && x.kaedah === "3B") ? "" : " dan keratan akhbar yang telah ditampal") + ".</p>";
+  }
+  /** Muat naik PDF ke Documents, dipaut ke projek fail ini. Tunggu senarai Program (untuk pemilih projek). */
+  function sbDokTambah(id, kat, cubaan) {
+    const o = (LD.order || []).find((x) => x.id === id); if (!o) return;
+    if (!LD.program && !LD.err.program && (cubaan || 0) < 30) { if ((cubaan || 0) === 0) toast("Menyediakan…"); liveLoad("program"); setTimeout(() => sbDokTambah(id, kat, (cubaan || 0) + 1), 500); return; }
+    dkBorang(null, sbRef(o), kat, () => sbSegar(() => openLiveOrder(id)));
+    const tj = modal.querySelector("[name=tajuk]");
+    if (tj && !tj.value) tj.value = (kat === "Keratan Akhbar" ? "THE SUN, UM DAN NANYANG " : "SIGNBOARD LAMAN WEB DBKL ") + (/^TETUAN\b/i.test(o.tetuan) ? "" : "TETUAN ") + String(o.tetuan || "").toUpperCase() + (kat === "Keratan Akhbar" && o.tarikhOrder ? " " + o.tarikhOrder.replace(/\//g, ".") : "");
   }
   function sbBorang(id) {
     const o = id ? (LD.order || []).find((x) => x.id === id) : null;
@@ -1163,7 +1202,7 @@
       { name: "tajuk", label: "Tajuk projek (cadangan pembangunan)", type: "textarea", full: true, maxlength: 2000, value: o ? o.tajuk : "" },
       { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 1000, value: o ? o.catatan : "" }
     ], onSubmit: (v) => LIVE.api("signboard.save", Object.assign({ sb_id: o ? o.id : "" }, v)).then((r) => {
-      toast(o ? "Fail dikemas kini." : "Fail " + r.sb_id + " dicipta."); LD.order = null; LD.busy.order = false; liveLoad("order");
+      toast(o ? "Fail dikemas kini." : "Fail " + r.sb_id + " dicipta."); sbSegar(() => openLiveOrder(r.sb_id));
     }) });
   }
   function sbPadam(id) {
@@ -1171,11 +1210,40 @@
     openForm({ live: true, liveNota: "Fail ditanda DIPADAM dan disorok. Gambar dan dokumen dalam Drive tidak dibuang.", title: "Padam " + o.id + "?", submit: "Padam", fields: [
       { name: "sebab", label: "Sebab (pilihan)", full: true, maxlength: 300 },
       { name: "sah", label: "Saya pasti mahu padam fail " + o.id + " (" + (o.tetuan || "") + ").", type: "confirm", required: true }
-    ], onSubmit: (v) => LIVE.api("signboard.padam", { sb_id: o.id, sebab: v.sebab || "" }).then(() => { toast("Fail " + o.id + " dipadam."); LD.order = null; LD.busy.order = false; liveLoad("order"); }) });
+    ], onSubmit: (v) => LIVE.api("signboard.padam", { sb_id: o.id, sebab: v.sebab || "" }).then(() => { toast("Fail " + o.id + " dipadam."); sbSegar(); }) });
+  }
+  /** Laporan Gambar (ganti pptx): A4 melintang, satu gambar sehalaman; gambar Laman Web DBKL di hujung. */
+  async function sbLaporanGambar(id) {
+    const o = (LD.order || []).find((x) => x.id === id); if (!o) return;
+    toast("Menyediakan laporan gambar…");
+    try {
+      const senarai = (await LIVE.api("foto.list", { order_id: id })).foto.filter((x) => !x.tersembunyi)
+        .sort((a, b) => (a.peringkat === "LAMAN_WEB") - (b.peringkat === "LAMAN_WEB") || String(a.diambil_pada).localeCompare(String(b.diambil_pada)));
+      if (!senarai.length) { toast("Belum ada gambar dalam fail ini."); return; }
+      const tetuan = (/^TETUAN\b/i.test(o.tetuan) ? "" : "TETUAN ") + String(o.tetuan || "").toUpperCase();
+      const hal = [];
+      for (let i = 0; i < senarai.length; i++) {
+        const x = senarai[i]; toast("Memuatkan gambar " + (i + 1) + " / " + senarai.length + "…");
+        const g = await LIVE.api("foto.get", { foto_id: x.foto_id });
+        if (!/^image\/(jpeg|png|webp)$/.test(g.mime) || !/^[A-Za-z0-9+/=]+$/.test(g.data)) continue;
+        const web = x.peringkat === "LAMAN_WEB";
+        hal.push('<section class="lg-hal"><div class="lg-kepala">' + (web ? "<b>LAMAN WEB DBKL</b><br>" : "") + "<b>" + esc(tetuan) + "</b>" + (o.rujukanJprb ? "<br>NO RUJUKAN JPRB : " + esc(o.rujukanJprb) : "") +
+          (x.diambil_pada ? "<br>TARIKH : " + esc(fmtDate(x.diambil_pada)) : "") + (x.catatan ? "<br>" + esc(x.catatan) : "") + '</div><div class="lg-gambar"><img src="data:' + g.mime + ";base64," + g.data + '" alt=""></div></section>');
+      }
+      const html = '<div class="lg">' + hal.join("") + "</div>";
+      let area = document.getElementById("print-area");
+      if (!area) { area = document.createElement("div"); area.id = "print-area"; document.body.appendChild(area); }
+      area.innerHTML = html;
+      const tarikh = (senarai.find((x) => x.peringkat !== "LAMAN_WEB" && x.diambil_pada) || {}).diambil_pada || o.tarikhPasang || TODAY;
+      const namaFail = "GAMBAR " + isoKeHbt(tarikh).replace(/\//g, ".") + " " + tetuan;
+      openInfo({ title: "Laporan Gambar · " + hal.length + " halaman", body: '<div class="slip-pratonton lg-pratonton">' + html + "</div>" + note("Klik Cetak, kemudian pilih 'Save as PDF'. Nama fail cadangan: " + namaFail),
+        actions: btn("Cetak / Simpan PDF", "gj-print", "primary") });
+      modal.classList.add("modal-slip"); setTimeout(() => modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true }), 0);
+    } catch (e) { toast(e.message || "Gagal menyediakan laporan."); }
   }
 
   /* ========== Gambar signboard (sejarah per order) ========== */
-  const FOTO_PERINGKAT = [["DIPASANG", "Dipasang"], ["SAMPEL", "Draf / Sampel"], ["PENURUNAN", "Penurunan"], ["PEMINDAHAN", "Pemindahan"], ["BUKTI", "Bukti lain"]];
+  const FOTO_PERINGKAT = [["DIPASANG", "Dipasang"], ["LAMAN_WEB", "Laman Web DBKL (screenshot)"], ["SAMPEL", "Draf / Sampel"], ["PENURUNAN", "Penurunan"], ["PEMINDAHAN", "Pemindahan"], ["BUKTI", "Bukti lain"]];
   const fotoLabel = (k) => (FOTO_PERINGKAT.find(([v]) => v === k) || [k, k])[1];
   const THUMB_SAH = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/;
   async function fotoMuat(orderId) {
@@ -1190,7 +1258,7 @@
           '<br><span class="muted">' + esc(f.oleh) + (f.tersembunyi ? " · tersembunyi" : "") + "</span>" +
           (o.bolehSorok ? '<br><button type="button" class="link-btn" data-action="foto-sorok" data-id="' + esc(f.foto_id) + '" data-order="' + esc(orderId) + '" data-papar="' + (f.tersembunyi ? "1" : "") + '">' + (f.tersembunyi ? "Papar semula" : "Sorok") + "</button>" : "") +
           "</figcaption></figure>").join("") + "</div>"
-        : '<p class="small muted">Belum ada gambar untuk order ini.</p>';
+        : '<p class="small muted">Belum ada gambar dalam fail ini.</p>';
     } catch (e) { if (el()) el().innerHTML = '<p class="small muted">' + esc(e.message) + "</p>"; }
   }
   // Mampatkan gambar dalam pelayar: sisi terpanjang maks `maks` px, JPEG.
@@ -1213,27 +1281,33 @@
     });
   }
   function fotoTambah(orderId) {
-    openForm({ live: true, title: "Tambah Gambar: " + orderId, submit: "Muat Naik", intro: note("Gambar dimampatkan automatik sebelum dihantar."), fields: [
+    let pilihan = [];
+    openForm({ live: true, title: "Tambah Gambar: " + orderId, submit: "Muat Naik", intro: note("Boleh pilih beberapa gambar sekali gus (dari galeri atau kamera). Gambar dimampatkan automatik sebelum dihantar."), fields: [
       { name: "foto", label: "Gambar", type: "file", required: true, full: true },
-      { name: "peringkat", label: "Peringkat", type: "select", options: FOTO_PERINGKAT, value: "DIPASANG" },
+      { name: "peringkat", label: "Jenis gambar", type: "select", options: FOTO_PERINGKAT, value: "DIPASANG" },
       { name: "diambil_pada", label: "Tarikh gambar", type: "date", value: TODAY, max: TODAY },
       { name: "catatan", label: "Catatan (pilihan)", type: "textarea", full: true, maxlength: 300 }
     ], onSubmit: async (d) => {
-      const g = d.foto;
-      if (!g || !g.size) { toast("Sila pilih gambar."); return; }
-      if (!/^image\//.test(g.type)) { toast("Fail mesti gambar."); return; }
-      toast("Memampatkan dan memuat naik…");
-      try {
-        const penuh = await fotoMampat(g, 1600, 0.82);
-        let thumb = await fotoMampat(g, 320, 0.6);
-        if (thumb.length > 44000) thumb = await fotoMampat(g, 240, 0.5);
-        await LIVE.api("foto.upload", { order_id: orderId, peringkat: d.peringkat, diambil_pada: d.diambil_pada, catatan: d.catatan, mime: "image/jpeg", data: penuh.split(",")[1], thumb: thumb });
-        toast("Gambar dimuat naik.");
-        openLiveOrder(orderId);
-      } catch (e) { toast(e.message || "Gagal memuat naik."); }
+      const fail = pilihan.length ? pilihan : d.foto && d.foto.size ? [d.foto] : [];
+      if (!fail.length) { toast("Sila pilih gambar."); return; }
+      if (fail.some((g) => !/^image\//.test(g.type))) { toast("Semua fail mesti gambar."); return; }
+      let ok = 0;
+      for (let i = 0; i < fail.length; i++) {
+        const g = fail[i];
+        toast("Memuat naik gambar " + (i + 1) + " / " + fail.length + "…");
+        try {
+          const penuh = await fotoMampat(g, 1600, 0.82);
+          let thumb = await fotoMampat(g, 320, 0.6);
+          if (thumb.length > 44000) thumb = await fotoMampat(g, 240, 0.5);
+          await LIVE.api("foto.upload", { order_id: orderId, peringkat: d.peringkat, diambil_pada: d.diambil_pada, catatan: d.catatan, mime: "image/jpeg", data: penuh.split(",")[1], thumb: thumb });
+          ok++;
+        } catch (e) { toast((g.name || "Gambar") + ": " + (e.message || "gagal dimuat naik.")); }
+      }
+      if (ok) toast(ok + " gambar dimuat naik.");
+      sbSegar(() => openLiveOrder(orderId));
     } });
     const inp = modal.querySelector('input[type="file"]');
-    if (inp) { inp.setAttribute("accept", "image/*"); inp.setAttribute("capture", "environment"); }
+    if (inp) { inp.setAttribute("accept", "image/*"); inp.multiple = true; inp.addEventListener("change", () => { pilihan = [...inp.files]; }); }
   }
   async function fotoLihat(id) {
     openInfo({ title: "Gambar " + id, body: '<p class="muted" role="status">Memuatkan gambar penuh…</p>' });
@@ -1799,7 +1873,7 @@
   /* Mod LIVE: docs.list / docs.save / docs.hide (tab DOKUMEN, SCE-DEV-TASKS).
    * Tanpa login (?demo=1): PRATONTON sahaja, rekod dalam memori tab ini, tiada apa disimpan. */
   const DK = { list: null, kategori: null, bolehTambah: false, bolehPaparSemula: false, err: null, busy: false };
-  const DK_KAT = ["Surat Jemputan", "Surat", "Laporan", "Quotation / Invois"]; // 24/11/2026: Lukisan, Gambar, Kontrak, Lain-lain dibuang daripada paparan
+  const DK_KAT = ["Surat Jemputan", "Surat", "Laporan", "Quotation / Invois", "Signboard Laman Web", "Keratan Akhbar"]; // 24/11/2026: Lukisan, Gambar, Kontrak, Lain-lain dibuang; 25/11/2026: 2 kategori Fail Signboard
   const dkKat = () => (DK.kategori || DK_KAT).filter((k) => DK_KAT.includes(k));
   const DK_MAKS_PDF = 5 * 1024 * 1024;
   const dkCaraLalai = (kat) => (kat === "Laporan" ? "PAUTAN" : "PDF"); // Keputusan pemilik: Laporan guna pautan Canva; surat jemputan dll. PDF
@@ -1877,7 +1951,7 @@
       "</section>";
   }
 
-  function dkBorang(d, refProjek, katPra) {
+  function dkBorang(d, refProjek, katPra, selepas) {
     const ada = !!d, opsRuj = [];
     const pjPra = refProjek ? pjCari(refProjek) : ada && d.rujukan_jenis === "PROJEK" ? pjCari(d.rujukan) : null;
     (LD.order || []).forEach((o) => opsRuj.push(o.id + (o.tetuan ? " · " + o.tetuan : "")));
@@ -1926,6 +2000,7 @@
         if (fail) toast("Memuat naik " + fail.name + "…");
         try { const o = await LIVE.api("docs.save", isi); toast((ada ? "Dikemas kini: " : "Disimpan: ") + o.doc_id); } catch (e) { toast(e.message); }
         dkReload();
+        if (typeof selepas === "function") selepas();
       } });
     const u = modal.querySelector("[name=url]"), help = u && u.closest(".field").querySelector(".field-help");
     if (u && help) u.addEventListener("input", () => { help.textContent = dkPetunjuk(u.value); });
@@ -3258,6 +3333,8 @@
     "live-order"(el) { openLiveOrder(el.dataset.id); },
     "sb-borang"(el) { sbBorang(el.dataset.id || ""); },
     "sb-padam"(el) { sbPadam(el.dataset.id); },
+    "sb-dok"(el) { sbDokTambah(el.dataset.id, el.dataset.kat); },
+    "sb-laporan"(el) { sbLaporanGambar(el.dataset.id); },
     "sb-projek"(el) { const ref = el.dataset.ref; modal.close(); location.hash = "#projects"; const cuba = (n) => { if (LD.program && LD.order && PJ.meta !== null) pjBuka(ref); else if (n > 0) setTimeout(() => cuba(n - 1), 600); }; setTimeout(() => cuba(30), 300); },
     "lt-new"() { liveTaskNew(); },
     "lmp-tambah"(el) { ltLampiranTambah(el.dataset.task); },
