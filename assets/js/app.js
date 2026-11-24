@@ -234,7 +234,7 @@
   const LIVE_TIADA_CAP = ["finance.", "dbkl.", "program."]; // kewangan ditangguh; Program dan DBKL kini data sebenar baca sahaja
   const can = (cap) => POLICY.caps.includes(cap) && !(LIVE_USER && LIVE_TIADA_CAP.some((p) => cap.indexOf(p) === 0));
   Object.keys(PERMISSIONS).forEach((k) => { const r = PERMISSIONS[k].routes; if ((r.includes("programs") || r.includes("dbkl")) && !r.includes("operations")) r.push("operations"); });
-  const canRoute = (r) => (r === "rujukan" ? !!(LIVE_USER && LIVE_USER.role !== "VIEWER") : r === "payroll" ? !!(LIVE_USER && LIVE_USER.payroll) : r === "quotation" ? !!(LIVE_USER && LIVE_USER.quotation) : POLICY.routes.includes(r) && !(LIVE_USER && r === "finance"));
+  const canRoute = (r) => (r === "staff" && LIVE_USER ? true : r === "rujukan" ? !!(LIVE_USER && LIVE_USER.role !== "VIEWER") : r === "payroll" ? !!(LIVE_USER && LIVE_USER.payroll) : r === "quotation" ? !!(LIVE_USER && LIVE_USER.quotation) : POLICY.routes.includes(r) && !(LIVE_USER && r === "finance"));
   const me = SESSION.name;
   let F = null; // data kewangan: kekal null bagi role tanpa finance.view
 
@@ -1056,7 +1056,7 @@
     LIVE.api(SUMBER[kind][0])
       .then((o) => { LD[kind] = SUMBER[kind][1] ? o[SUMBER[kind][1]] : o; LD.at[kind] = o.dikemasKini; LD.err[kind] = null; })
       .catch((e) => { LD.err[kind] = e.code === "TIADA_KEBENARAN" ? "Akaun anda tiada kebenaran untuk data ini." : (e.message || "Ralat memuatkan data."); })
-      .finally(() => { LD.busy[kind] = false; if (kind === "notif") renderNotifs(); else if (["programs", "dbkl", "operations", "dashboard", "tasks", "payroll", "quotation", "projects"].includes(currentRoute())) refresh(); });
+      .finally(() => { LD.busy[kind] = false; if (kind === "notif") renderNotifs(); else if (["programs", "dbkl", "operations", "dashboard", "tasks", "payroll", "quotation", "projects", "staff"].includes(currentRoute())) refresh(); });
   }
   const liveTag = '<span class="live-tag">Data sebenar · baca sahaja</span>';
   const liveTagDev = '<span class="live-tag">Data sebenar DEV</span>'; // Tasks dan notifikasi: boleh ditulis, dalam SCE-DEV-TASKS
@@ -2828,7 +2828,74 @@
   }
 
   /* ========== Paparan: Staff Directory ========== */
+  /* ---------- Direktori Staf: pengguna sebenar (SCE-DEV-AUTH, aktif sahaja), 23/11/2026 ---------- */
+  const ST = { list: null, err: null, busy: false };
+  function stLoad() {
+    if (ST.busy) return; ST.busy = true;
+    LIVE.api("staff.list").then((o) => { ST.list = o.staf || []; ST.err = null; stAvatarSaya(); })
+      .catch((e) => { ST.err = e.code === "TINDAKAN_TAK_SAH" ? "Direktori Staf belum aktif (backend belum dikemas kini)." : e.message; })
+      .finally(() => { ST.busy = false; if (currentRoute() === "staff") refresh(); });
+  }
+  const stFotoHtml = (u, kelas) => (u.foto && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(u.foto) ? '<img class="' + kelas + '" src="' + esc(u.foto) + '" alt="">' : esc(namaPapar(u.nama || u.emel).charAt(0).toUpperCase()));
+  function stAvatarSaya() {
+    const saya = (ST.list || []).find((u) => u.emel === LIVE_USER.emel), el = document.getElementById("profile-avatar");
+    if (el && saya && saya.foto) { el.innerHTML = stFotoHtml(saya, "avatar-foto"); el.classList.add("ada-foto"); }
+  }
+  /** Potong tengah jadi segi empat dan mampat ke JPEG (avatar). */
+  function fotoSegi(fail, saiz, kualiti) {
+    return new Promise((ok, gagal) => {
+      const r = new FileReader(); r.onerror = () => gagal(new Error("Gagal membaca fail."));
+      r.onload = () => { const img = new Image(); img.onerror = () => gagal(new Error("Fail bukan gambar yang boleh dibaca."));
+        img.onload = () => { const sisi = Math.min(img.width, img.height), c = document.createElement("canvas"); c.width = c.height = saiz;
+          const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, saiz, saiz); g.drawImage(img, (img.width - sisi) / 2, (img.height - sisi) / 2, sisi, sisi, 0, 0, saiz, saiz); ok(c.toDataURL("image/jpeg", kualiti)); };
+        img.src = r.result; };
+      r.readAsDataURL(fail);
+    });
+  }
+  function stFotoTukar(emel) {
+    const u = (ST.list || []).find((x) => x.emel === emel); if (!u) return;
+    openForm({ live: true, liveNota: "Gambar disimpan dalam SCE-DEV-TASKS (tab PROFIL) sebagai gambar kecil. Dilihat oleh semua pengguna SCE CENTRAL.", title: "Gambar profil: " + namaPapar(u.nama), submit: "Simpan gambar",
+      intro: note("Pilih gambar (JPEG / PNG). Gambar dipotong segi empat di tengah dan dikecilkan secara automatik."), fields: [{ name: "fail", label: "Gambar", type: "file", required: true, full: true }],
+      onSubmit: async (d) => {
+        const g = d.fail; if (!g || !g.size) { toast("Sila pilih gambar."); return; }
+        if (!/^image\//.test(g.type)) { toast("Fail mesti gambar."); return; }
+        try {
+          let foto = await fotoSegi(g, 240, 0.82); if (foto.length > 58000) foto = await fotoSegi(g, 200, 0.7);
+          await LIVE.api("profil.foto", { emel: emel, foto: foto }); toast("Gambar profil disimpan.");
+        } catch (e) { toast(e.message); }
+        ST.list = null; stLoad();
+      } });
+    const inp = modal.querySelector('input[type="file"]'); if (inp) inp.setAttribute("accept", "image/*");
+  }
+  function stFotoBuang(emel) {
+    const u = (ST.list || []).find((x) => x.emel === emel); if (!u) return;
+    openForm({ live: true, liveNota: "Tindakan ini direkod dalam audit.", title: "Buang gambar profil?", submit: "Ya, buang gambar", fields: [{ name: "sah", label: "Saya pasti mahu membuang gambar " + namaPapar(u.nama), type: "confirm", required: true }],
+      onSubmit: async () => { try { await LIVE.api("profil.foto", { emel: emel, foto: "" }); toast("Gambar dibuang."); } catch (e) { toast(e.message); } ST.list = null; stLoad(); } });
+    const hantar = modal.querySelector('button[type="submit"]'); if (hantar) { hantar.classList.remove("primary"); hantar.classList.add("btn-bahaya"); }
+  }
+  function viewStaffLive() {
+    const head = pageHead("Direktori Staf", "Kakitangan Sri Cheras Enterprise yang mempunyai akaun SCE CENTRAL.", liveTagDev);
+    if (ST.err) return head + '<section class="panel"><div class="empty"><p>' + esc(ST.err) + "</p></div></section>";
+    if (!ST.list) { stLoad(); return head + '<section class="panel"><div class="empty" role="status"><p>Memuatkan…</p></div></section>'; }
+    if (!LD.tasks && !LD.err.tasks && LIVE_USER.role !== "VIEWER") liveLoad("tasks");
+    const ROLE_URUT = ["SUPER_ADMIN", "MANAGEMENT", "PROJECT_MANAGER", "STAFF", "VIEWER"];
+    const roleAda = ROLE_URUT.filter((r) => ST.list.some((u) => u.role === r));
+    if (!f("staff.role")) state.filters["staff.role"] = "Semua";
+    const pilih = f("staff.role"), kata = f("staff.q").toLowerCase().split(/\s+/).filter(Boolean);
+    const list = ST.list.filter((u) => (pilih === "Semua" || LIVE.roleLabel(u.role) === pilih) && kata.every((w) => [u.nama, u.jawatan, u.emel, LIVE.roleLabel(u.role)].join(" ").toLowerCase().includes(w)))
+      .sort((a, b) => ROLE_URUT.indexOf(a.role) - ROLE_URUT.indexOf(b.role) || a.nama.localeCompare(b.nama));
+    const tugasan = (LD.tasks && LD.tasks.tasks) || [];
+    const aktif = (emel) => tugasan.filter((t) => !["COMPLETED", "CANCELLED"].includes(t.status) && [t.primary_assignee].concat(String(t.team || "").split(",")).map((x) => x.trim().toLowerCase()).includes(emel)).length;
+    const nama = (u) => namaPapar(u.nama || u.emel);
+    return head + '<div class="toolbar">' + searchBox("staff.q", "Cari nama, jawatan atau emel") + chips("staff.role", ["Semua"].concat(roleAda.map((r) => LIVE.roleLabel(r)))) + "</div>" +
+      (list.length ? '<div class="people">' + list.map((u) => '<article class="person"><span class="avatar' + (u.foto ? " ada-foto" : "") + '" aria-hidden="true">' + stFotoHtml(u, "avatar-foto") + "</span><div><h3>" + esc(nama(u)) +
+        (u.emel === LIVE_USER.emel ? ' <span class="badge info">Anda</span>' : "") + "</h3><p>" + esc(u.jawatan || "—") + " · " + esc(LIVE.roleLabel(u.role)) + '</p><p class="small"><a href="mailto:' + esc(u.emel) + '">' + esc(u.emel) + "</a></p>" +
+        (LD.tasks && u.role !== "VIEWER" ? '<p class="small muted">' + aktif(u.emel) + " tugasan aktif</p>" : "") +
+        (u.emel === LIVE_USER.emel || LIVE_USER.role === "SUPER_ADMIN" ? '<p class="person-aksi">' + btn(u.foto ? "Tukar gambar" : "+ Gambar", "st-foto", "small", ' data-emel="' + esc(u.emel) + '"') + (u.foto ? btn("Buang", "st-foto-buang", "small btn-buang", ' data-emel="' + esc(u.emel) + '"') : "") + "</p>" : "") + "</div></article>").join("") + "</div>"
+        : empty("Tiada kakitangan sepadan."));
+  }
   function viewStaff() {
+    if (LIVE_USER) return viewStaffLive();
     const dp = f("staff.dept"), q = f("staff.q").toLowerCase(), users = DAL.users();
     const rows = users.filter((s) => (dp === "Semua" || s.dept === dp) && (!q || (s.name + s.title).toLowerCase().includes(q)));
     return pageHead("Staff Directory", "Direktori kakitangan mengikut jabatan.", "") +
@@ -3130,6 +3197,8 @@
     "pj-laporan"(el) { dkBorang(null, el.dataset.ref, "Laporan"); },
     "pj-surat"(el) { dkBorang(null, el.dataset.ref, "Surat Jemputan"); },
     "pj-tapis"(el) { const t = el.dataset.tapis; state.filters["pj.status"] = t === "Selesai" ? "Selesai" : "Aktif"; state.filters["pj.jenis"] = t === "Signboard" ? "Signboard" : "Semua"; refresh(); },
+    "st-foto"(el) { stFotoTukar(el.dataset.emel); },
+    "st-foto-buang"(el) { stFotoBuang(el.dataset.emel); },
     "rj-reload"() { rjReload(); },
     "rj-jana"() { rjJanaBorang(null); },
     "rj-buka"(el) { rjBuka(el.dataset.id); },
@@ -3582,6 +3651,7 @@
     if (LIVE_USER) {
       const nama = LIVE_USER.nama || LIVE_USER.emel;
       $("#profile-avatar").textContent = nama.charAt(0);
+      setTimeout(() => { if (LIVE_USER.role) { if (ST.list) stAvatarSaya(); else stLoad(); } }, 1200); // gambar profil sendiri di topbar
       $("#profile-name").textContent = nama;
       $("#profile-role").textContent = LIVE.roleLabel(LIVE_USER.role) + (LIVE_USER.jawatan ? " · " + LIVE_USER.jawatan : "");
       $("#profile-pop").innerHTML = '<button type="button" class="pop-link" data-action="lt-pw">Tukar password</button>' + (LIVE_USER.role === "SUPER_ADMIN" ? '<a href="#access" class="pop-link">Pengguna & Akses</a>' : "") + '<button type="button" class="pop-link" data-live-logout>Log keluar</button>' + '<p class="pop-versi">SCE CENTRAL DEV · Versi ' + esc(LIVE.versi) + "</p>";
