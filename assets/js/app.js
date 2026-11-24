@@ -234,7 +234,7 @@
   const LIVE_TIADA_CAP = ["finance.", "dbkl.", "program."]; // kewangan ditangguh; Program dan DBKL kini data sebenar baca sahaja
   const can = (cap) => POLICY.caps.includes(cap) && !(LIVE_USER && LIVE_TIADA_CAP.some((p) => cap.indexOf(p) === 0));
   Object.keys(PERMISSIONS).forEach((k) => { const r = PERMISSIONS[k].routes; if ((r.includes("programs") || r.includes("dbkl")) && !r.includes("operations")) r.push("operations"); });
-  const canRoute = (r) => (r === "staff" && LIVE_USER ? true : r === "rujukan" ? !!(LIVE_USER && LIVE_USER.role !== "VIEWER") : r === "payroll" ? !!(LIVE_USER && LIVE_USER.payroll) : r === "quotation" ? !!(LIVE_USER && LIVE_USER.quotation) : POLICY.routes.includes(r) && !(LIVE_USER && r === "finance"));
+  const canRoute = (r) => (r === "settings" && LIVE_USER ? false : r === "staff" && LIVE_USER ? true : r === "rujukan" ? !!(LIVE_USER && LIVE_USER.role !== "VIEWER") : r === "payroll" ? !!(LIVE_USER && LIVE_USER.payroll) : r === "quotation" ? !!(LIVE_USER && LIVE_USER.quotation) : POLICY.routes.includes(r) && !(LIVE_USER && r === "finance"));
   const me = SESSION.name;
   let F = null; // data kewangan: kekal null bagi role tanpa finance.view
 
@@ -707,9 +707,9 @@
       "</div>";
     if (r.akanDatang) {
       const up = r.akanDatang.length ? '<ul class="live-list">' + r.akanDatang.map((p) => '<li><span class="tnum">' + fmtDate(p.tarikh) + "</span><span>" + esc(p.jenis) + " · " + esc(p.tetuan) + '</span><span class="muted small">' + esc(p.lokasi || "") + "</span></li>").join("") + "</ul>" : '<p class="muted small">Tiada program akan datang dalam rekod.</p>';
-      const ord = r.orderTertunggak.length ? '<ul class="live-list">' + r.orderTertunggak.map((o) => '<li><span class="tnum">' + esc(o.id) + "</span><span>" + esc(o.tetuan) + " · " + esc(o.kaedah) + " · " + o.siap + "/" + o.perlu + '</span><span class="muted small">Seterusnya: ' + esc(o.seterusnya) + "</span></li>").join("") + "</ul>" : '<p class="muted small">Tiada order tertunggak.</p>';
+      const ord = r.orderTertunggak.length ? '<ul class="live-list">' + r.orderTertunggak.map((o) => '<li><span class="tnum">' + esc(o.id) + "</span><span>" + esc(o.tetuan) + " · Kaedah " + esc(o.kaedah) + "</span></li>").join("") + "</ul>" : '<p class="muted small">Tiada fail signboard aktif.</p>';
       html += '<div class="grid" style="margin-top:12px"><section class="panel c6">' + panelHead("Program Akan Datang", r.akanDatang.length + " terdekat", routeLink("programs", "Buka"), liveTag) + up + "</section>" +
-        '<section class="panel c6">' + panelHead("Order Signboard Tertunggak", r.orderTertunggak.length + " order", routeLink("dbkl", "Buka"), liveTag) + ord + "</section></div>";
+        '<section class="panel c6">' + panelHead("Signboard Aktif", r.orderTertunggak.length + " fail", routeLink("dbkl", "Buka"), liveTagDev) + ord + "</section></div>";
     } else {
       html += note("Paparan ringkasan sahaja untuk role anda. Butiran rekod tidak dipaparkan.");
     }
@@ -1054,7 +1054,7 @@
     LD.busy[kind] = true;
     const SUMBER = { program: ["ops.programs.list", "program"], order: ["ops.signboard.list", "order"], ringkasan: ["dashboard.summary", "ringkasan"], tasks: ["tasks.list", null], notif: ["notifications.list", null] };
     LIVE.api(SUMBER[kind][0])
-      .then((o) => { LD[kind] = SUMBER[kind][1] ? o[SUMBER[kind][1]] : o; LD.at[kind] = o.dikemasKini; LD.err[kind] = null; })
+      .then((o) => { if (kind === "order") LD.sbPadam = !!o.bolehPadam; LD[kind] = SUMBER[kind][1] ? o[SUMBER[kind][1]] : o; LD.at[kind] = o.dikemasKini; LD.err[kind] = null; })
       .catch((e) => { LD.err[kind] = e.code === "TIADA_KEBENARAN" ? "Akaun anda tiada kebenaran untuk data ini." : (e.message || "Ralat memuatkan data."); })
       .finally(() => { LD.busy[kind] = false; if (kind === "notif") renderNotifs(); else if (["programs", "dbkl", "operations", "dashboard", "tasks", "payroll", "quotation", "projects", "staff"].includes(currentRoute())) refresh(); });
   }
@@ -1117,31 +1117,61 @@
     ]) + note("Rekod sebenar, baca sahaja. Kemas kini dibuat dalam dashboard operasi sedia ada.") });
   }
 
-  const LANGKAH_TONE = { siap: "good", belum: "neutral", na: "neutral" };
+  /* ========== Fail Signboard DEV (24/11/2026): ganti ORDER SIGNBOARD produksi + checklist 10 langkah ========== */
+  const SB_TONE = { AKTIF: "info", SELESAI: "good" };
+  const sbBadge = (o) => badge(o.status === "SELESAI" ? "Selesai" : "Aktif", SB_TONE[o.status] || "info");
   function viewDbklLive() {
-    const gate = liveGate("order"); if (gate) return pageHead("DBKL Advertising", "Order signboard Kaedah 3A dan 3B.") + gate;
-    const all = LD.order;
-    return pageHead("DBKL Advertising", "Order signboard Kaedah 3A dan 3B dengan checklist 10 langkah. " + liveStamp("order"), btn("Keratan Akhbar", "akh-borang") + " " + liveTag) +
-      note("Kaedah 3B: langkah 8 (Iklan Akhbar) automatik N/A. Butiran proses lain belum disahkan dan kekal boleh ubah.") +
-      '<section class="panel" style="margin-top:16px">' + panelHead("Order Signboard", all.length + " order", "", liveTag) + table([
-        { h: "ID Order", r: (o) => '<button type="button" class="text-link tnum" data-action="live-order" data-id="' + esc(o.id) + '">' + esc(o.id) + "</button>" },
-        { h: "Tarikh", r: (o) => '<span class="tnum">' + esc(o.tarikhOrder || "—") + "</span>" },
+    const gate = liveGate("order"); if (gate) return pageHead("DBKL Signboard", "Fail signboard Kaedah 3A dan 3B.") + gate;
+    if (!f("sb.st")) state.filters["sb.st"] = "Semua";
+    const kata = f("sb.q").toLowerCase().split(/\s+/).filter(Boolean), st = f("sb.st");
+    const all = LD.order.filter((o) => (st === "Semua" || (st === "Aktif" ? o.status !== "SELESAI" : o.status === "SELESAI")) &&
+      kata.every((w) => [o.id, o.tetuan, o.rujukanJprb, o.kaedah, o.lokasi, o.tajuk].join(" ").toLowerCase().includes(w)));
+    return pageHead("DBKL Signboard", "Satu fail untuk setiap signboard: gambar, dokumen, keratan akhbar dan quotation di satu tempat. " + liveStamp("order"),
+      btn("Keratan Akhbar", "akh-borang") + " " + btn("+ Fail Signboard", "sb-borang", "primary")) +
+      '<div class="toolbar">' + searchBox("sb.q", "Cari Tetuan, JPRB, tajuk") + chips("sb.st", ["Semua", "Aktif", "Selesai"]) + "</div>" +
+      '<section class="panel">' + panelHead("Fail Signboard", all.length + " daripada " + LD.order.length + " fail", "", liveTagDev) + table([
+        { h: "ID", r: (o) => '<button type="button" class="text-link tnum" data-action="live-order" data-id="' + esc(o.id) + '">' + esc(o.id) + "</button>" },
+        { h: "Tarikh pasang", r: (o) => '<span class="tnum">' + esc(o.tarikhOrder || "—") + "</span>" },
         { h: "Tetuan", r: (o) => esc(o.tetuan || "—") },
         { h: "JPRB", r: (o) => esc(o.rujukanJprb || "—") },
         { h: "Kaedah", r: (o) => esc(o.kaedah || "—") },
-        { h: "Staf", r: (o) => esc(o.staf || "—") },
-        { h: "Kemajuan", r: (o) => progress(pct(o.siap, o.perlu), o.siap === o.perlu ? "good" : "") },
-        { h: "Seterusnya", r: (o) => (o.seterusnya === "Selesai" ? badge("Selesai") : esc(o.seterusnya)) }
-      ], all, empty("Tiada order signboard.")) + "</section>";
+        { h: "Status", r: (o) => sbBadge(o) }
+      ], all, empty(LD.order.length ? "Tiada fail sepadan." : "Belum ada fail signboard. Klik + Fail Signboard untuk mula.")) + "</section>";
   }
   function openLiveOrder(id) {
     const o = (LD.order || []).find((x) => x.id === id); if (!o) return;
-    openInfo({ title: "Order " + o.id, body: detailList([["Tetuan", esc(o.tetuan || "—")], ["No. Rujukan JPRB", esc(o.rujukanJprb || "—")], ["Lokasi", esc(o.lokasi || "—")], ["Kaedah", esc(o.kaedah || "—")], ["Staf", esc(o.staf || "—")], ["Kemajuan", o.siap + " / " + o.perlu + " langkah"]]) +
-      '<ol class="checklist">' + o.langkah.map((l) => '<li class="cl-' + l.status + '"><span>' + esc(l.nama) + "</span>" + '<span class="badge ' + LANGKAH_TONE[l.status] + '">' + (l.status === "siap" ? esc(l.tarikh) : l.status === "na" ? "N/A" : "Belum") + "</span></li>").join("") + "</ol>" +
-      note("Rekod sebenar, baca sahaja. Tanda langkah dibuat dalam Portal Staf dashboard operasi sedia ada.") +
+    const ref = "ORD-" + pjSlug(o.id);
+    openInfo({ title: o.id + " · " + (o.tetuan || ""), body: detailList([["Tetuan", esc(o.tetuan || "—")], ["No. Rujukan JPRB", esc(o.rujukanJprb || "—")], ["Kaedah", esc(o.kaedah || "—")],
+        ["Tarikh pasang", esc(o.tarikhOrder || "—")], ["Lokasi", esc(o.lokasi || "—")], ["Status", sbBadge(o)], ["Didaftar oleh", esc(o.staf || "—")]]) +
+      (o.tajuk ? '<p class="sub-head" style="margin-top:12px">Tajuk projek</p><p class="small" style="white-space:pre-line">' + esc(o.tajuk) + "</p>" : "") +
+      (o.catatan ? '<p class="sub-head" style="margin-top:12px">Catatan</p><p class="small" style="white-space:pre-line">' + esc(o.catatan) + "</p>" : "") +
+      '<p class="small" style="margin-top:12px">' + btn("Buka projek (dokumen & tugasan)", "sb-projek", "", ' data-ref="' + esc(ref) + '"') + " " + btn("Sunting", "sb-borang", "", ' data-id="' + esc(o.id) + '"') +
+      (LD.sbPadam ? " " + btn("Padam fail", "sb-padam", "danger", ' data-id="' + esc(o.id) + '"') : "") + "</p>" +
       '<h3 class="sub-head" style="margin-top:16px">Gambar Signboard</h3><div id="galeri-foto" data-order="' + esc(o.id) + '"><p class="small muted" role="status">Memuatkan gambar…</p></div>',
-      actions: btn("Keratan Akhbar", "akh-borang", "", ' data-tetuan="' + esc(o.tetuan || "") + '" data-jprb="' + esc(o.rujukanJprb || "") + '"') + " " + btn("+ Tambah Gambar", "foto-tambah", "primary", ' data-id="' + esc(o.id) + '"') });
+      actions: btn("Keratan Akhbar", "akh-borang", "", ' data-tetuan="' + esc(o.tetuan || "") + '" data-jprb="' + esc(o.rujukanJprb || "") + '" data-tarikh="' + esc(o.tarikhPasang || "") + '"') + " " + btn("+ Tambah Gambar", "foto-tambah", "primary", ' data-id="' + esc(o.id) + '"') });
     fotoMuat(o.id);
+  }
+  function sbBorang(id) {
+    const o = id ? (LD.order || []).find((x) => x.id === id) : null;
+    openForm({ live: true, liveNota: "Disimpan dalam SCE-DEV-TASKS (tab SIGNBOARD). Sheet produksi tidak diubah.", title: o ? "Sunting " + o.id : "Fail Signboard Baharu", submit: o ? "Simpan" : "Cipta fail", fields: [
+      { name: "tetuan", label: "Tetuan", required: true, full: true, maxlength: 150, value: o ? o.tetuan : "" },
+      { name: "kaedah", label: "Kaedah", type: "select", required: true, options: [["3A", "Kaedah 3A (signboard + akhbar)"], ["3B", "Kaedah 3B (signboard sahaja)"]], value: o ? o.kaedah : "3A" },
+      { name: "jprb", label: "No. Rujukan JPRB (contoh 5327/2026)", maxlength: 60, value: o ? o.rujukanJprb : "" },
+      { name: "tarikh_pasang", label: "Tarikh pasang", type: "date", value: o ? o.tarikhPasang : "" },
+      { name: "status", label: "Status", type: "select", options: [["AKTIF", "Aktif"], ["SELESAI", "Selesai"]], value: o ? o.status : "AKTIF" },
+      { name: "lokasi", label: "Lokasi", full: true, maxlength: 200, value: o ? o.lokasi : "" },
+      { name: "tajuk", label: "Tajuk projek (cadangan pembangunan)", type: "textarea", full: true, maxlength: 2000, value: o ? o.tajuk : "" },
+      { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 1000, value: o ? o.catatan : "" }
+    ], onSubmit: (v) => LIVE.api("signboard.save", Object.assign({ sb_id: o ? o.id : "" }, v)).then((r) => {
+      toast(o ? "Fail dikemas kini." : "Fail " + r.sb_id + " dicipta."); LD.order = null; LD.busy.order = false; liveLoad("order");
+    }) });
+  }
+  function sbPadam(id) {
+    const o = (LD.order || []).find((x) => x.id === id); if (!o) return;
+    openForm({ live: true, liveNota: "Fail ditanda DIPADAM dan disorok. Gambar dan dokumen dalam Drive tidak dibuang.", title: "Padam " + o.id + "?", submit: "Padam", fields: [
+      { name: "sebab", label: "Sebab (pilihan)", full: true, maxlength: 300 },
+      { name: "sah", label: "Saya pasti mahu padam fail " + o.id + " (" + (o.tetuan || "") + ").", type: "confirm", required: true }
+    ], onSubmit: (v) => LIVE.api("signboard.padam", { sb_id: o.id, sebab: v.sebab || "" }).then(() => { toast("Fail " + o.id + " dipadam."); LD.order = null; LD.busy.order = false; liveLoad("order"); }) });
   }
 
   /* ========== Gambar signboard (sejarah per order) ========== */
@@ -1299,9 +1329,9 @@
     });
     (LD.order || []).forEach((o) => {
       const ref = unik("ORD-" + pjSlug(o.id));
-      const st = o.perlu && o.siap >= o.perlu ? "SELESAI" : o.siap ? "BERJALAN" : "BARU";
+      const st = o.status === "SELESAI" ? "SELESAI" : "BERJALAN";
       out.push({ ref, sumber: "AUTO", asal: "order", src: o, jenis: o.kaedah === "3A" || o.kaedah === "3B" ? "SIGNBOARD " + o.kaedah : "SIGNBOARD", nama: o.tetuan || o.id, rujukan: o.id + (o.rujukanJprb ? " · JPRB " + o.rujukanJprb : ""), lokasi: o.lokasi, tarikh: pjTarikhIso(o.tarikhOrder), statusSheet: st,
-        nota: st === "SELESAI" ? "10 langkah selesai" : "Seterusnya: " + o.seterusnya, kemajuan: pct(o.siap, o.perlu), pmAsal: o.staf || "" });
+        nota: st === "SELESAI" ? "Selesai" : "Fail signboard aktif", kemajuan: pct(o.siap, o.perlu), pmAsal: o.staf || "" });
     });
     (PJ.meta || []).filter((m) => m.sumber === "MANUAL").forEach((m) => {
       out.push({ ref: m.project_id, sumber: "MANUAL", asal: "manual", src: m, jenis: m.jenis || "LAIN-LAIN", nama: m.nama, pelanggan: m.pelanggan, rujukan: m.rujukan, lokasi: m.lokasi, tarikh: m.tarikh_mula || String(m.created_at || "").slice(0, 10), statusSheet: m.status || "BARU", nota: "Projek manual", kemajuan: null, pmAsal: "" });
@@ -1431,7 +1461,7 @@
     if (!LD.tasks && !LD.err.tasks && LIVE_USER.role !== "VIEWER") liveLoad("tasks");
     if (!DK.list && !DK.err) dkLoad();
     let langkah = "";
-    if (p.asal === "order") langkah = '<p class="sub-head" style="margin-top:16px">Checklist DBKL (' + s.siap + "/" + s.perlu + ')</p><ol class="pj-langkah">' + s.langkah.map((l) => '<li class="' + l.status + '"><span class="pj-tanda">' + (l.status === "siap" ? "✓" : l.status === "na" ? "N/A" : "") + "</span>" + esc(l.nama) + (l.tarikh ? ' <span class="small muted">' + esc(l.tarikh) + "</span>" : "") + "</li>").join("") + "</ol>";
+    if (p.asal === "order" && s.langkah && s.langkah.length) langkah = '<p class="sub-head" style="margin-top:16px">Checklist DBKL (' + s.siap + "/" + s.perlu + ')</p><ol class="pj-langkah">' + s.langkah.map((l) => '<li class="' + l.status + '"><span class="pj-tanda">' + (l.status === "siap" ? "✓" : l.status === "na" ? "N/A" : "") + "</span>" + esc(l.nama) + (l.tarikh ? ' <span class="small muted">' + esc(l.tarikh) + "</span>" : "") + "</li>").join("") + "</ol>";
     if (p.asal === "program") {
       const boleh = PJ.bolehTanda && !PJ.tiada;
       langkah = '<p class="sub-head" style="margin-top:16px">Tahap program</p><ol class="pj-langkah">' + [["event", "Event"], ["report", "Report"], ["submission", "Submission"]].map(([t, n]) => {
@@ -1452,7 +1482,7 @@
       (p.asal === "program" && DK.list ? '<p class="pj-tanda-baris">' + pjTandaDok(p, "Laporan", "Laporan") + pjTandaDok(p, "Surat Jemputan", "Surat jemputan") + "</p>" : "") +
       (p.dokumen.length ? '<ul class="live-list">' + p.dokumen.map((d) => '<li><button type="button" class="text-link" data-action="dk-lihat" data-id="' + esc(d.doc_id) + '">' + esc(d.tajuk) + "</button><span>" + esc(d.kategori) + " · " + esc((DK_JENIS[d.jenis] || DK_JENIS.LINK)[0]) + "</span></li>").join("") + "</ul>" : '<p class="small muted">' + (DK.list ? "Belum ada dokumen untuk projek ini." : "Memuatkan dokumen…") + "</p>");
     const ubah = PJ.bolehUrus && !PJ.tiada ? btn("Ubah maklumat", "pj-ubah", "", ' data-ref="' + esc(p.ref) + '"') + " " : "";
-    const ops = p.asal === "order" ? btn("Buka order (gambar signboard)", "live-order", "", ' data-id="' + esc(s.id) + '"') + " " : p.asal === "program" ? btn("Buka rekod program", "live-detail", "", ' data-kunci="' + esc(s.kunci) + '"') + " " : "";
+    const ops = p.asal === "order" ? btn("Buka fail signboard (gambar)", "live-order", "", ' data-id="' + esc(s.id) + '"') + " " : p.asal === "program" ? btn("Buka rekod program", "live-detail", "", ' data-kunci="' + esc(s.kunci) + '"') + " " : "";
     openInfo({ title: p.nama, actions: ubah + ops, body: detailList([
       ["Status", pjBadge(p.status) + (p.nota ? ' <span class="small muted">' + esc(p.nota) + "</span>" : "")], ["Kemajuan", progress(p.kemajuan || 0, p.status === "SELESAI" ? "good" : "")],
       ["Jenis", esc(PJ_JENIS[p.jenis] || p.jenis)], ["Rujukan", esc(p.rujukan || "—")], ["Pelanggan", esc(p.pelanggan || (p.asal !== "manual" ? p.nama : "") || "—")], ["Lokasi", esc(p.lokasi || "—")],
@@ -1769,7 +1799,8 @@
   /* Mod LIVE: docs.list / docs.save / docs.hide (tab DOKUMEN, SCE-DEV-TASKS).
    * Tanpa login (?demo=1): PRATONTON sahaja, rekod dalam memori tab ini, tiada apa disimpan. */
   const DK = { list: null, kategori: null, bolehTambah: false, bolehPaparSemula: false, err: null, busy: false };
-  const DK_KAT = ["Surat Jemputan", "Surat", "Laporan", "Quotation / Invois", "Lukisan / Design", "Gambar", "Kontrak", "Lain-lain"];
+  const DK_KAT = ["Surat Jemputan", "Surat", "Laporan", "Quotation / Invois"]; // 24/11/2026: Lukisan, Gambar, Kontrak, Lain-lain dibuang daripada paparan
+  const dkKat = () => (DK.kategori || DK_KAT).filter((k) => DK_KAT.includes(k));
   const DK_MAKS_PDF = 5 * 1024 * 1024;
   const dkCaraLalai = (kat) => (kat === "Laporan" ? "PAUTAN" : "PDF"); // Keputusan pemilik: Laporan guna pautan Canva; surat jemputan dll. PDF
   const DK_RUJ = { UMUM: "Umum (syarikat)", PROJEK: "Projek", PROGRAM: "Program / Sesi", SIGNBOARD: "Order Signboard", TUGASAN: "Tugasan" };
@@ -1841,7 +1872,7 @@
       (dkDemo() ? note("Pratonton: dokumen yang ditambah di sini hanya dalam tab ini dan hilang bila dimuat semula. Tiada apa-apa dihantar ke server. Dalam mod sebenar, quotation yang MUKTAMAD juga muncul di sini secara automatik (kategori Quotation / Invois).") : "") +
       '<section class="panel">' + panelHead("Semua Dokumen", list.length + " daripada " + DK.list.length + " dokumen", "", tag) +
       '<div class="toolbar">' + searchBox("dk.q", "Cari tajuk, rujukan, catatan") + filterSelect("dk.ruj", "Dipaut kepada", [["", "Semua"]].concat(Object.entries(DK_RUJ))) + "</div>" +
-      '<div class="toolbar">' + chips("dk.kat", ["Semua"].concat(DK.kategori || DK_KAT)) + "</div>" +
+      '<div class="toolbar">' + chips("dk.kat", ["Semua"].concat(dkKat())) + "</div>" +
       (list.length ? '<div class="dk-grid">' + list.map(kad).join("") + "</div>" : empty(DK.list.length ? "Tiada dokumen sepadan dengan penapis ini." : "Belum ada dokumen. Tambah pautan Canva atau Google Drive yang pertama.", tambah)) +
       "</section>";
   }
@@ -1853,7 +1884,7 @@
     (LD.program || []).forEach((p) => opsRuj.push([p.noFail, p.tetuan].filter(Boolean).join(" · ")));
     ((LD.tasks && LD.tasks.tasks) || []).forEach((t) => opsRuj.push(t.task_id + " · " + t.title));
     const fields = [
-      { name: "kategori", label: "Kategori", type: "select", required: true, options: [["", "Pilih kategori…"]].concat(DK.kategori || DK_KAT), value: ada ? d.kategori : katPra || "" },
+      { name: "kategori", label: "Kategori", type: "select", required: true, options: [["", "Pilih kategori…"]].concat(dkKat(), ada && !DK_KAT.includes(d.kategori) ? [d.kategori] : []), value: ada ? d.kategori : katPra || "" },
       { name: "tajuk", label: "Tajuk dokumen", required: true, maxlength: 150, value: ada ? d.tajuk : "" },
       { name: "cara", label: "Cara simpan", type: "select", full: true, options: [["PDF", "Muat naik fail PDF (maks 5 MB)"], ["PAUTAN", "Pautan Canva / Google Drive"]], value: ada ? (d.jenis === "PDF" ? "PDF" : "PAUTAN") : katPra ? dkCaraLalai(katPra) : "PDF" },
       { name: "fail", label: ada && d.jenis === "PDF" ? "Fail PDF (pilih hanya jika mahu ganti)" : "Fail PDF", type: "file", full: true, help: ada && d.nama_fail ? "Fail semasa: " + d.nama_fail : "Contoh: surat jemputan yang telah ditandatangani." },
@@ -3225,6 +3256,9 @@
     "live-reload"(el) { const k = el.dataset.kind; LD[k] = null; LD.err[k] = null; liveLoad(k); refresh(); },
     "live-detail"(el) { openLiveDetail(el.dataset.kunci); },
     "live-order"(el) { openLiveOrder(el.dataset.id); },
+    "sb-borang"(el) { sbBorang(el.dataset.id || ""); },
+    "sb-padam"(el) { sbPadam(el.dataset.id); },
+    "sb-projek"(el) { const ref = el.dataset.ref; modal.close(); location.hash = "#projects"; const cuba = (n) => { if (LD.program && LD.order && PJ.meta !== null) pjBuka(ref); else if (n > 0) setTimeout(() => cuba(n - 1), 600); }; setTimeout(() => cuba(30), 300); },
     "lt-new"() { liveTaskNew(); },
     "lmp-tambah"(el) { ltLampiranTambah(el.dataset.task); },
     "lmp-lihat"(el) { ltLampiranLihat(el.dataset.id); },
@@ -3254,7 +3288,7 @@
     "pj-tapis"(el) { const t = el.dataset.tapis; state.filters["pj.status"] = t === "Selesai" ? "Selesai" : "Aktif"; state.filters["pj.jenis"] = t === "Signboard" ? "Signboard" : "Semua"; refresh(); },
     "st-foto"(el) { stFotoTukar(el.dataset.emel); },
     "st-foto-buang"(el) { stFotoBuang(el.dataset.emel); },
-    "akh-borang"(el) { akhBorang({ tetuan: el.dataset.tetuan || "", jprb: el.dataset.jprb || "" }); },
+    "akh-borang"(el) { akhBorang({ tetuan: el.dataset.tetuan || "", jprb: el.dataset.jprb || "", tarikh: el.dataset.tarikh || "" }); },
     "rj-reload"() { rjReload(); },
     "rj-jana"() { rjJanaBorang(null); },
     "rj-buka"(el) { rjBuka(el.dataset.id); },
