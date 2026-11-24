@@ -821,3 +821,10 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
 .q3b-item td.q3b-rm span:last-child, .q3b-ringkas td.q3b-rm b:last-child { float: right; }
 .q3b-gm td.c { text-align: center; }
 .q3-item .lu-acara { border-collapse: collapse; } .q3-item .lu-acara td { border: 0; padding: 1px 10px 1px 0; }
+/* Cetakan dari telefon (24/11/2026): lebar tetap ikut kertas A4 + tiada pembesaran font automatik */
+@media print {
+  html, body, #print-area { -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important; }
+  body { min-width: 0 !important; }
+  #print-area .quo { width: 182mm !important; max-width: none !important; }
+  #print-area .slip { width: 186mm !important; max-width: none !important; }
+}

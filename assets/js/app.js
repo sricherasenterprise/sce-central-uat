@@ -3340,7 +3340,19 @@
     "gj-buang"(el) { gjBacaBorang(); GJ.edit.item[el.dataset.k].splice(+el.dataset.i, 1); refresh(); },
     "gj-simpan"() { gjSimpan(); },
     "gj-cetak"() { gjCetak(); },
-    "gj-print"() { const t = document.title, n = document.querySelector("#modal .note"); const m = n && /Nama fail cadangan: (.*)$/.exec(n.textContent); if (m) document.title = m[1]; window.print(); document.title = t; },
+    "gj-print"() {
+      const t = document.title, n = document.querySelector("#modal .note"); const m = n && /Nama fail cadangan: (.*)$/.exec(n.textContent); if (m) document.title = m[1];
+      // Telefon (24/11/2026): susun halaman pada lebar desktop sebelum cetak supaya quotation / slip tidak "lari"; dipulihkan selepas cetak.
+      const vp = document.querySelector("meta[name=viewport]"), asal = vp ? vp.getAttribute("content") : "";
+      if (vp && window.innerWidth < 900) {
+        vp.setAttribute("content", "width=1000");
+        const pulih = () => { vp.setAttribute("content", asal); document.title = t; window.removeEventListener("afterprint", pulih); };
+        window.addEventListener("afterprint", pulih);
+        setTimeout(() => { window.print(); }, 400);
+        return;
+      }
+      window.print(); document.title = t;
+    },
     "gj-muktamad"() { openForm({ live: true, title: "Muktamadkan " + GJ.edit.slip_id, submit: "Muktamadkan", intro: note("Slip akan dikunci. Hanya SUPER ADMIN atau MANAGEMENT boleh membukanya semula."), fields: [{ name: "ok", label: "Saya telah menyemak semua amaun", type: "confirm", required: true }], onSubmit: () => gjStatus("MUKTAMAD") }); },
     "gj-bukasemula"() { openForm({ live: true, title: "Buka Semula " + GJ.edit.slip_id, submit: "Buka Semula", fields: [{ name: "sebab", label: "Sebab", type: "textarea", required: true, full: true, maxlength: 300 }], onSubmit: (d) => gjStatus("DRAF", d.sebab) }); },
     "lt-pw"() { closePops(); liveChangePassword(); },
