@@ -1847,7 +1847,11 @@
   function akhBorang(pra) {
     pra = pra || {};
     const jprb = String(pra.jprb || "").replace(/^DBKL[.\s]*JPRB[.\s]*/i, "").trim();
+    // 25/11/2026: pilih daripada Fail Signboard (Kaedah 3A) supaya nama sama dengan fail; boleh juga taip sendiri.
+    const failSb = (LD.order || []).filter((o) => o.kaedah !== "3B");
+    const dipilih = failSb.find((o) => o.tetuan && String(pra.tetuan || "").replace(/^TETUAN\s+/i, "").toUpperCase() === o.tetuan.toUpperCase());
     openForm({ live: true, liveNota: "Tiada apa disimpan. Halaman dijana untuk dicetak / Save as PDF sahaja.", title: "Halaman Keratan Akhbar", submit: "Jana halaman", fields: [
+      ...(failSb.length ? [{ name: "fail_sb", label: "Pilih fail signboard", type: "select", full: true, options: [["", "— Taip sendiri —"]].concat(failSb.map((o) => [o.id, o.id + " · " + o.tetuan + (o.tarikhOrder ? " · " + o.tarikhOrder : "")])), value: dipilih ? dipilih.id : "" }] : []),
       { name: "tetuan", label: "Tetuan", required: true, full: true, maxlength: 150, value: pra.tetuan || "" },
       { name: "jprb", label: "No. Rujukan JPRB (contoh 5327/2026)", required: true, maxlength: 60, value: jprb },
       { name: "tarikh", label: "Tarikh iklan pertama", type: "date", required: true, value: pra.tarikh || "" },
@@ -1867,6 +1871,14 @@
       modal.classList.add("modal-slip"); setTimeout(() => modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true }), 0);
     } });
     const sel = modal.querySelector("[name=akhbar]"); if (sel) [...sel.options].forEach((o) => { o.selected = true; });
+    const tt = modal.querySelector("[name=tetuan]"); if (tt) tt.setAttribute("autocomplete", "off");
+    const pf = modal.querySelector("[name=fail_sb]");
+    if (pf) pf.addEventListener("change", () => {
+      const o = failSb.find((x) => x.id === pf.value); if (!o) return;
+      const isi = (n, v) => { const el = modal.querySelector("[name=" + n + "]"); if (el) { el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); } };
+      isi("tetuan", o.tetuan || ""); isi("jprb", String(o.rujukanJprb || "").replace(/^DBKL[.\s]*JPRB[.\s]*/i, ""));
+      if (o.tarikhPasang) { const t = modal.querySelector("[name=tarikh]"); if (t) isi("tarikh", t.type === "date" ? o.tarikhPasang : isoKeHbt(o.tarikhPasang)); }
+    });
   }
 
   /* ========== Pusat Dokumen (pautan Canva / Google Drive / lain) ========== */
