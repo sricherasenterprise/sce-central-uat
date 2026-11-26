@@ -288,6 +288,8 @@
     access: '<path d="M12 3 4 6v6c0 4.500 3.300 7.800 8 9 4.700-1.200 8-4.500 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
     staff: '<circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c1-3.500 3.500-5 6.500-5s5.500 1.500 6.500 5"/><path d="M16 5a3.500 3.500 0 0 1 0 6.500M18 15c1.800.7 3 2.300 3.500 5"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.900 4.900 7 7M17 17l2.100 2.100M19.100 4.900 17 7M7 17l-2.100 2.100"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+    moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
     bell: '<path d="M6 10a6 6 0 1 1 12 0c0 5 2 6 2 7H4c0-1 2-2 2-7z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
     menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
     left: '<path d="m15 5-7 7 7 7"/>',
@@ -307,6 +309,14 @@
   }
   function pageHead(title, desc, actions) {
     return '<div class="page-head"><div><h1>' + esc(title) + "</h1><p>" + esc(desc) + '</p></div><div class="page-actions">' + (actions || "") + "</div></div>";
+  }
+  /** Suis tema (26/11/2026): ikon di bar atas. Bulan = tukar ke mod malam; matahari = tukar ke mod siang. Lihat assets/js/tema.js. */
+  const temaHtml = () => "";
+  window.addEventListener("sce-tema", () => temaIkon()); // Auto: ikon ikut bila tetapan peranti berubah
+  function temaIkon() {
+    const b = document.getElementById("tema-btn"); if (!b || !window.SCE_TEMA) return;
+    const gelap = document.documentElement.getAttribute("data-theme") === "dark", label = gelap ? "Tukar ke mod siang (cerah)" : "Tukar ke mod malam (gelap)";
+    b.innerHTML = icon(gelap ? "sun" : "moon"); b.setAttribute("aria-label", label); b.title = label; b.hidden = false;
   }
   const btn = (label, action, cls, extra) => '<button type="button" class="btn ' + (cls || "") + '" data-action="' + action + '"' + (extra || "") + ">" + esc(label) + "</button>";
   const capBtn = (cap, label, action, cls, extra) => (can(cap) ? btn(label, action, cls, extra) : "");
@@ -3299,6 +3309,7 @@
     $("#brand-company").textContent = D.settings.company;
     document.title = label + " · SCE CENTRAL";
     renderNotifs();
+    temaIkon();
   }
   function render(isNav) {
     const route = currentRoute();
@@ -3447,6 +3458,7 @@
     "cal-day"(el) { state.cal.sel = el.dataset.date; refresh(); },
     "notif-toggle"() { togglePop("notif"); },
     "profile-toggle"() { togglePop("profile"); },
+    "tema-tukar"() { if (!window.SCE_TEMA) return; SCE_TEMA.tetap(document.documentElement.getAttribute("data-theme") === "dark" ? "cerah" : "gelap"); temaIkon(); },
     "read-all"() { DAL.notifications().forEach((n) => { if (!n.readBy.includes(me)) n.readBy.push(me); }); refresh(); },
     "open-notif"(el) {
       const n = DAL.notifications().find((x) => x.id === el.dataset.id); if (!n) return;
@@ -3968,7 +3980,7 @@
       setTimeout(() => { if (LIVE_USER.role) { if (ST.list) stAvatarSaya(); else stLoad(); } }, 1200); // gambar profil sendiri di topbar
       $("#profile-name").textContent = nama;
       $("#profile-role").textContent = LIVE.roleLabel(LIVE_USER.role) + (LIVE_USER.jawatan ? " · " + LIVE_USER.jawatan : "");
-      $("#profile-pop").innerHTML = '<button type="button" class="pop-link" data-action="lt-pw">Tukar password</button>' + (LIVE_USER.role === "SUPER_ADMIN" ? '<a href="#access" class="pop-link">Pengguna & Akses</a>' : "") + '<button type="button" class="pop-link" data-live-logout>Log keluar</button>' + '<p class="pop-versi">SCE CENTRAL DEV · Versi ' + esc(LIVE.versi) + "</p>";
+      $("#profile-pop").innerHTML = '<button type="button" class="pop-link" data-action="lt-pw">Tukar password</button>' + (LIVE_USER.role === "SUPER_ADMIN" ? '<a href="#access" class="pop-link">Pengguna & Akses</a>' : "") + '<button type="button" class="pop-link" data-live-logout>Log keluar</button>' + temaHtml() + '<p class="pop-versi">SCE CENTRAL DEV · Versi ' + esc(LIVE.versi) + "</p>";
       $(".demo-pill").textContent = "DEV";
       // Bar DEV kuning hanya untuk mod pratonton (?demo=1). Label DEV di topbar sudah memadai.
       $(".demo-bar").hidden = true;
@@ -3979,7 +3991,7 @@
     $("#profile-name").textContent = me;
     $("#profile-role").textContent = SESSION.role;
     const links = [["workspace", "My Workspace"], ["notifications", "Notification Centre"], ["staff", "Staff Directory"], ["settings", "Company Settings"]].filter(([r]) => canRoute(r));
-    $("#profile-pop").innerHTML = links.length ? links.map(([r, l]) => '<a href="#' + r + '" class="pop-link">' + esc(l) + "</a>").join("") : '<p class="small muted" style="padding:8px 12px">Akses baca sahaja.</p>';
+    $("#profile-pop").innerHTML = (links.length ? links.map(([r, l]) => '<a href="#' + r + '" class="pop-link">' + esc(l) + "</a>").join("") : '<p class="small muted" style="padding:8px 12px">Akses baca sahaja.</p>') + temaHtml();
     $("#demo-role").innerHTML = Object.keys(PERSONAS).map((k) => { const u = D.users.find((x) => x.name === PERSONAS[k]); return '<option value="' + k + '"' + (k === SESSION.persona ? " selected" : "") + ">" + esc(u.name) + " — " + esc(u.role) + (u.status === "Aktif" ? "" : " (tidak aktif)") + "</option>"; }).join("");
   }
   if (LIVE_USER) setInterval(() => { if (!document.hidden && !LD.busy.notif) { LD.err.notif = null; liveLoad("notif"); } }, 60000);
