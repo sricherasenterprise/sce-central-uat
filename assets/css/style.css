@@ -901,3 +901,7 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
 .pop-tema-pilih { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .pop-tema-pilih button { min-height: 32px; padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text-2); font-size: var(--fs-micro); font-weight: 600; cursor: pointer; }
 .pop-tema-pilih button[aria-pressed="true"] { background: var(--teal); border-color: var(--teal); color: #fff; }
+
+/* Suis bahasa BM / EN (26/11/2026) */
+.icon-btn.bahasa-btn { width: auto; min-width: 44px; padding: 0 10px; font-size: 13px; font-weight: 700; letter-spacing: .04em; color: var(--text-2); }
+.icon-btn.bahasa-btn:hover { color: var(--text); }

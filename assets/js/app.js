@@ -313,6 +313,13 @@
   /** Suis tema (26/11/2026): ikon di bar atas. Bulan = tukar ke mod malam; matahari = tukar ke mod siang. Lihat assets/js/tema.js. */
   const temaHtml = () => "";
   window.addEventListener("sce-tema", () => temaIkon()); // Auto: ikon ikut bila tetapan peranti berubah
+  /** Suis bahasa BM / EN (26/11/2026): butang menunjuk bahasa yang akan ditukar. Lihat assets/js/bahasa.js + kamus-en.js. */
+  function bahasaIkon() {
+    const b = document.getElementById("bahasa-btn"); if (!b || !window.SCE_BAHASA) return;
+    const en = SCE_BAHASA.semasa === "en";
+    b.textContent = en ? "BM" : "EN"; b.setAttribute("data-no-tr", "");
+    b.setAttribute("aria-label", en ? "Switch to Bahasa Melayu" : "Tukar ke English"); b.title = b.getAttribute("aria-label"); b.hidden = false;
+  }
   function temaIkon() {
     const b = document.getElementById("tema-btn"); if (!b || !window.SCE_TEMA) return;
     const gelap = document.documentElement.getAttribute("data-theme") === "dark", label = gelap ? "Tukar ke mod siang (cerah)" : "Tukar ke mod malam (gelap)";
@@ -3310,6 +3317,7 @@
     document.title = label + " · SCE CENTRAL";
     renderNotifs();
     temaIkon();
+    bahasaIkon();
   }
   function render(isNav) {
     const route = currentRoute();
@@ -3458,6 +3466,7 @@
     "cal-day"(el) { state.cal.sel = el.dataset.date; refresh(); },
     "notif-toggle"() { togglePop("notif"); },
     "profile-toggle"() { togglePop("profile"); },
+    "bahasa-tukar"() { if (window.SCE_BAHASA) SCE_BAHASA.tetap(SCE_BAHASA.semasa === "en" ? "bm" : "en"); },
     "tema-tukar"() { if (!window.SCE_TEMA) return; SCE_TEMA.tetap(document.documentElement.getAttribute("data-theme") === "dark" ? "cerah" : "gelap"); temaIkon(); },
     "read-all"() { DAL.notifications().forEach((n) => { if (!n.readBy.includes(me)) n.readBy.push(me); }); refresh(); },
     "open-notif"(el) {
