@@ -851,3 +851,20 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
   #print-area .lg-hal { page: lgambar; width: 277mm; height: 188mm; break-after: page; }
   #print-area .lg-hal:last-child { break-after: auto; }
 }
+
+/* Gambar Signboard (PPTX + PDF), 26/11/2026: halaman sama geometri dengan PPTX (slaid A4 PowerPoint 190.5 x 275.17 mm) */
+.gsb-hal { position: relative; overflow: hidden; background: #fff; width: 100%; aspect-ratio: 6858 / 9906; container-type: inline-size; }
+.gsb-kotak { position: absolute; overflow: hidden; }
+.gsb-kotak img { position: absolute; max-width: none; display: block; }
+.gsb-kotak.garis::after { content: ""; position: absolute; inset: 0; border: 1px solid #000; pointer-events: none; }
+.gsb-teks { position: absolute; font: 400 3.333cqw/1.2 Calibri, Carlito, "Segoe UI", Arial, sans-serif; color: #000; white-space: nowrap; padding: 0 1.33cqw; box-sizing: border-box; }
+.gsb-pratonton .gsb-hal { border: 1px solid #ccc; margin: 0 auto 14px; max-width: 420px; }
+.gsb-kawalan { display: grid; gap: 10px; margin-bottom: 12px; }
+.gsb-kawal { display: flex; gap: 12px; align-items: center; border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px; }
+.gsb-kawal > img { width: 64px; height: 64px; object-fit: cover; border-radius: 4px; flex: none; }
+.gsb-kawal input[type=range] { width: 100%; max-width: 260px; display: block; }
+@media print {
+  @page gambarsb { size: 190.5mm 275.17mm; margin: 0; }
+  #print-area .gsb-hal { page: gambarsb; width: 190.5mm; height: 275.17mm; aspect-ratio: auto; break-after: page; border: 0; }
+  #print-area .gsb-hal:last-child { break-after: auto; }
+}

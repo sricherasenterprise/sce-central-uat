@@ -11,7 +11,7 @@
   "use strict";
 
   // Versi aplikasi yang dipaparkan kepada pengguna. Naikkan bersama ?v= dalam index.html setiap kali dikemas kini.
-  const VERSI = "2026.11.25-2";
+  const VERSI = "2026.11.26-1";
   const API_URL = "https://script.google.com/macros/s/AKfycbxYxl2vb0bc1gCQ0RqsyOXHvydXcmQy8m59bfqpyAXkWXQTFpM9Z_zLDGkE5IyLjhag/exec";
   const K_TOKEN = "sce-live-token", K_USER = "sce-live-user", K_MT = "sce-live-mesti-tukar";
   const ROLE_LABEL = { SUPER_ADMIN: "SUPER ADMIN", MANAGEMENT: "MANAGEMENT", PROJECT_MANAGER: "PROJECT MANAGER", STAFF: "STAFF", VIEWER: "VIEWER" };

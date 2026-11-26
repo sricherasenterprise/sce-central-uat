@@ -1142,7 +1142,7 @@
     const all = LD.order.filter((o) => (st === "Semua" || (st === "Aktif" ? o.status !== "SELESAI" : st === "Selesai" ? o.status === "SELESAI" : belumLengkap(o))) &&
       kata.every((w) => [o.id, o.tetuan, o.rujukanJprb, o.kaedah, o.lokasi, o.tajuk].join(" ").toLowerCase().includes(w)));
     return pageHead("DBKL Signboard", "Satu fail untuk setiap signboard: gambar, PDF laman web DBKL dan keratan akhbar di satu tempat. " + liveStamp("order"),
-      btn("Keratan Akhbar", "akh-borang") + " " + btn("+ Fail Signboard", "sb-borang", "primary")) +
+      btn("Jana Gambar Signboard", "gsb-mula") + " " + btn("Keratan Akhbar", "akh-borang") + " " + btn("+ Fail Signboard", "sb-borang", "primary")) +
       '<div class="toolbar">' + searchBox("sb.q", "Cari Tetuan, JPRB, tajuk") + chips("sb.st", ["Semua", "Aktif", "Selesai", "Belum lengkap"]) + "</div>" +
       '<section class="panel">' + panelHead("Fail Signboard", all.length + " daripada " + LD.order.length + " fail", "", liveTagDev) + table([
         { h: "ID", r: (o) => '<button type="button" class="text-link tnum" data-action="live-order" data-id="' + esc(o.id) + '">' + esc(o.id) + "</button>" },
@@ -1167,7 +1167,7 @@
       '<h3 class="sub-head" style="margin-top:16px">Dokumen (PDF)</h3><div id="sb-dok" data-ref="' + esc(sbRef(o)) + '"><p class="small muted" role="status">Memuatkan dokumen…</p></div>' +
       '<p class="small" style="margin-top:8px">' + butangDok("Signboard Laman Web", "+ PDF Laman Web DBKL") + (o.kaedah === "3B" ? "" : " " + butangDok("Keratan Akhbar", "+ PDF Keratan Akhbar")) + "</p>" +
       '<h3 class="sub-head" style="margin-top:16px">Gambar Signboard</h3><div id="galeri-foto" data-order="' + esc(o.id) + '"><p class="small muted" role="status">Memuatkan gambar…</p></div>',
-      actions: btn("Jana Laporan Gambar", "sb-laporan", "", ' data-id="' + esc(o.id) + '"') + " " + (o.kaedah === "3B" ? "" : btn("Keratan Akhbar", "akh-borang", "", ' data-tetuan="' + esc(o.tetuan || "") + '" data-jprb="' + esc(o.rujukanJprb || "") + '" data-tarikh="' + esc(o.tarikhPasang || "") + '"') + " ") +
+      actions: btn("Jana Gambar (PPTX / PDF)", "sb-laporan", "", ' data-id="' + esc(o.id) + '"') + " " + (o.kaedah === "3B" ? "" : btn("Keratan Akhbar", "akh-borang", "", ' data-tetuan="' + esc(o.tetuan || "") + '" data-jprb="' + esc(o.rujukanJprb || "") + '" data-tarikh="' + esc(o.tarikhPasang || "") + '"') + " ") +
         btn("+ Tambah Gambar", "foto-tambah", "primary", ' data-id="' + esc(o.id) + '"') });
     fotoMuat(o.id);
     sbDokMuat(sbRef(o));
@@ -1190,7 +1190,7 @@
     const tj = modal.querySelector("[name=tajuk]");
     if (tj && !tj.value) tj.value = (kat === "Keratan Akhbar" ? "THE SUN, UM DAN NANYANG " : "SIGNBOARD LAMAN WEB DBKL ") + (/^TETUAN\b/i.test(o.tetuan) ? "" : "TETUAN ") + String(o.tetuan || "").toUpperCase() + (kat === "Keratan Akhbar" && o.tarikhOrder ? " " + o.tarikhOrder.replace(/\//g, ".") : "");
   }
-  function sbBorang(id) {
+  function sbBorang(id, selepas) {
     const o = id ? (LD.order || []).find((x) => x.id === id) : null;
     openForm({ live: true, liveNota: "Disimpan dalam SCE-DEV-TASKS (tab SIGNBOARD). Sheet produksi tidak diubah.", title: o ? "Sunting " + o.id : "Fail Signboard Baharu", submit: o ? "Simpan" : "Cipta fail", fields: [
       { name: "tetuan", label: "Tetuan", required: true, full: true, maxlength: 150, value: o ? o.tetuan : "" },
@@ -1202,7 +1202,7 @@
       { name: "tajuk", label: "Tajuk projek (cadangan pembangunan)", type: "textarea", full: true, maxlength: 2000, value: o ? o.tajuk : "" },
       { name: "catatan", label: "Catatan", type: "textarea", full: true, maxlength: 1000, value: o ? o.catatan : "" }
     ], onSubmit: (v) => LIVE.api("signboard.save", Object.assign({ sb_id: o ? o.id : "" }, v)).then((r) => {
-      toast(o ? "Fail dikemas kini." : "Fail " + r.sb_id + " dicipta."); sbSegar(() => openLiveOrder(r.sb_id));
+      toast(o ? "Fail dikemas kini." : "Fail " + r.sb_id + " dicipta."); sbSegar(() => (typeof selepas === "function" ? selepas(r.sb_id) : openLiveOrder(r.sb_id)));
     }) });
   }
   function sbPadam(id) {
@@ -1212,34 +1212,154 @@
       { name: "sah", label: "Saya pasti mahu padam fail " + o.id + " (" + (o.tetuan || "") + ").", type: "confirm", required: true }
     ], onSubmit: (v) => LIVE.api("signboard.padam", { sb_id: o.id, sebab: v.sebab || "" }).then(() => { toast("Fail " + o.id + " dipadam."); sbSegar(); }) });
   }
-  /** Laporan Gambar (ganti pptx): A4 melintang, satu gambar sehalaman; gambar Laman Web DBKL di hujung. */
-  async function sbLaporanGambar(id) {
-    const o = (LD.order || []).find((x) => x.id === id); if (!o) return;
-    toast("Menyediakan laporan gambar…");
-    try {
-      const senarai = (await LIVE.api("foto.list", { order_id: id })).foto.filter((x) => !x.tersembunyi)
-        .sort((a, b) => (a.peringkat === "LAMAN_WEB") - (b.peringkat === "LAMAN_WEB") || String(a.diambil_pada).localeCompare(String(b.diambil_pada)));
-      if (!senarai.length) { toast("Belum ada gambar dalam fail ini."); return; }
-      const tetuan = (/^TETUAN\b/i.test(o.tetuan) ? "" : "TETUAN ") + String(o.tetuan || "").toUpperCase();
-      const hal = [];
-      for (let i = 0; i < senarai.length; i++) {
-        const x = senarai[i]; toast("Memuatkan gambar " + (i + 1) + " / " + senarai.length + "…");
-        const g = await LIVE.api("foto.get", { foto_id: x.foto_id });
-        if (!/^image\/(jpeg|png|webp)$/.test(g.mime) || !/^[A-Za-z0-9+/=]+$/.test(g.data)) continue;
-        const web = x.peringkat === "LAMAN_WEB";
-        hal.push('<section class="lg-hal"><div class="lg-kepala">' + (web ? "<b>LAMAN WEB DBKL</b><br>" : "") + "<b>" + esc(tetuan) + "</b>" + (o.rujukanJprb ? "<br>NO RUJUKAN JPRB : " + esc(o.rujukanJprb) : "") +
-          (x.diambil_pada ? "<br>TARIKH : " + esc(fmtDate(x.diambil_pada)) : "") + (x.catatan ? "<br>" + esc(x.catatan) : "") + '</div><div class="lg-gambar"><img src="data:' + g.mime + ";base64," + g.data + '" alt=""></div></section>');
+  /* ========== Penjana Gambar Signboard (PPTX + PDF), 26/11/2026 ========== */
+  /* Ikut template pemilik "GAMBAR <tarikh>.pptx": setiap gambar tapak = 2 halaman (penuh; potongan papan tanda + gambar kecil),
+   * diikuti halaman LAMAN WEB DBKL (imej halaman 1 PDF, diputar). Gambar & PDF disimpan terus dalam Fail Signboard. */
+  const GSB = { id: null, gambar: [], web: null, sedia: false };
+  const asetVer = () => ((document.querySelector('script[src*="app.js"]') || {}).src || "").split("?")[1] || "";
+  function muatSkrip(nama) {
+    return new Promise((ok, gagal) => {
+      if (document.querySelector('script[data-aset="' + nama + '"]')) return ok();
+      const s = document.createElement("script"); s.src = "assets/js/" + nama + "?" + asetVer(); s.dataset.aset = nama;
+      s.onload = () => ok(); s.onerror = () => gagal(new Error("Gagal memuat " + nama)); document.head.appendChild(s);
+    });
+  }
+  const gsbTetuan = (o) => (/^TETUAN\b/i.test(o.tetuan || "") ? "" : "TETUAN ") + String(o.tetuan || "").toUpperCase();
+  /** Langkah 1: pilih / cipta fail, tambah gambar tapak dan PDF laman web (semua disimpan dalam fail). */
+  function gsbMula(idPra) {
+    const senarai = LD.order || [];
+    let pilihan = [];
+    openForm({ live: true, liveNota: "Gambar dan PDF disimpan terus dalam Fail Signboard yang dipilih.", title: "Jana Gambar Signboard (PPTX + PDF)", submit: "Seterusnya", fields: [
+      { name: "fail_sb", label: "Fail signboard (Tetuan)", type: "select", required: true, full: true, options: [["", "— Pilih fail —"]].concat(senarai.map((o) => [o.id, o.id + " · " + o.tetuan + (o.tarikhOrder ? " · " + o.tarikhOrder : "")]), [["__BARU", "+ Cipta fail baharu…"]]), value: idPra || "" },
+      { name: "gambar", label: "Gambar tapak baharu (pilihan; pilih 2 jika ada 2 papan tanda, 3 jika 3)", type: "file", full: true },
+      { name: "tarikh", label: "Tarikh gambar", type: "date", value: TODAY, max: TODAY },
+      { name: "pdf", label: "PDF laman web DBKL (pilihan jika sudah ada dalam fail)", type: "file", full: true }
+    ], onSubmit: async (v) => {
+      const id = v.fail_sb;
+      if (!id || id === "__BARU") { toast("Sila pilih fail, atau cipta fail baharu."); return; }
+      const o = senarai.find((x) => x.id === id); if (!o) return;
+      let ok = 0;
+      for (let i = 0; i < pilihan.length; i++) {
+        toast("Menyimpan gambar " + (i + 1) + " / " + pilihan.length + "…");
+        try {
+          const penuh = await fotoMampat(pilihan[i], 2000, 0.85);
+          let thumb = await fotoMampat(pilihan[i], 320, 0.6); if (thumb.length > 44000) thumb = await fotoMampat(pilihan[i], 240, 0.5);
+          await LIVE.api("foto.upload", { order_id: id, peringkat: "DIPASANG", diambil_pada: v.tarikh || TODAY, catatan: "", mime: "image/jpeg", data: penuh.split(",")[1], thumb: thumb }); ok++;
+        } catch (e) { toast((pilihan[i].name || "Gambar") + ": " + (e.message || "gagal disimpan")); }
       }
-      const html = '<div class="lg">' + hal.join("") + "</div>";
-      let area = document.getElementById("print-area");
-      if (!area) { area = document.createElement("div"); area.id = "print-area"; document.body.appendChild(area); }
-      area.innerHTML = html;
-      const tarikh = (senarai.find((x) => x.peringkat !== "LAMAN_WEB" && x.diambil_pada) || {}).diambil_pada || o.tarikhPasang || TODAY;
-      const namaFail = "GAMBAR " + isoKeHbt(tarikh).replace(/\//g, ".") + " " + tetuan;
-      openInfo({ title: "Laporan Gambar · " + hal.length + " halaman", body: '<div class="slip-pratonton lg-pratonton">' + html + "</div>" + note("Klik Cetak, kemudian pilih 'Save as PDF'. Nama fail cadangan: " + namaFail),
-        actions: btn("Cetak / Simpan PDF", "gj-print", "primary") });
-      modal.classList.add("modal-slip"); setTimeout(() => modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true }), 0);
-    } catch (e) { toast(e.message || "Gagal menyediakan laporan."); }
+      const pdf = v.pdf && v.pdf.size ? v.pdf : null;
+      if (pdf) {
+        if (pdf.type !== "application/pdf" && !/\.pdf$/i.test(pdf.name)) { toast("Fail laman web mesti PDF."); return; }
+        if (pdf.size > DK_MAKS_PDF) { toast("PDF terlalu besar (maks 5 MB)."); return; }
+        const bait = new Uint8Array(await pdf.arrayBuffer());
+        if (String.fromCharCode.apply(null, bait.slice(0, 5)) !== "%PDF-") { toast("Kandungan fail bukan PDF."); return; }
+        let bin = ""; for (let i = 0; i < bait.length; i += 32768) bin += String.fromCharCode.apply(null, bait.subarray(i, i + 32768));
+        toast("Menyimpan PDF laman web…");
+        try {
+          await LIVE.api("docs.save", { doc_id: "", cara: "PDF", tajuk: "SIGNBOARD LAMAN WEB DBKL " + gsbTetuan(o), kategori: "Signboard Laman Web", url: "", rujukan_jenis: "PROJEK", rujukan: sbRef(o), catatan: "", akses: "SEMUA", no_rujukan: "", data: btoa(bin), mime: "application/pdf", nama_fail: pdf.name });
+          DK.list = null; DK.err = null;
+        } catch (e) { toast("PDF: " + e.message); }
+      }
+      if (ok) toast(ok + " gambar disimpan dalam " + id + ".");
+      gsbSedia(id);
+    } });
+    const inp = modal.querySelector("[name=gambar]");
+    if (inp) { inp.setAttribute("accept", "image/*"); inp.multiple = true; inp.addEventListener("change", () => { pilihan = [...inp.files]; }); }
+    const pdfEl = modal.querySelector("[name=pdf]"); if (pdfEl) pdfEl.setAttribute("accept", "application/pdf,.pdf");
+    const sel = modal.querySelector("[name=fail_sb]");
+    if (sel) sel.addEventListener("change", () => { if (sel.value === "__BARU") sbBorang("", (idBaru) => gsbMula(idBaru)); });
+  }
+  /** Muat gambar penuh dan imej laman web fail, kemudian papar pratonton. */
+  async function gsbSedia(id) {
+    const o = (LD.order || []).find((x) => x.id === id); if (!o) return;
+    openInfo({ title: "Gambar Signboard · " + id, body: '<p class="muted" role="status" id="gsb-status">Menyediakan gambar…</p>' });
+    const status = (t) => { const el = document.getElementById("gsb-status"); if (el) el.textContent = t; };
+    try {
+      await muatSkrip("pptx-sce.js");
+      const imej = (mime, data) => new Promise((ok, gagal) => { const im = new Image(); im.onload = () => ok({ src: im.src, w: im.naturalWidth, h: im.naturalHeight, ext: /png/.test(mime) ? "png" : "jpeg", b64: data }); im.onerror = () => gagal(new Error("Imej tidak dapat dibaca.")); im.src = "data:" + mime + ";base64," + data; });
+      const foto = (await LIVE.api("foto.list", { order_id: id })).foto.filter((x) => !x.tersembunyi);
+      const tapak = foto.filter((x) => x.peringkat !== "LAMAN_WEB").sort((a, b) => String(a.diambil_pada).localeCompare(String(b.diambil_pada)) || String(a.uploaded_at).localeCompare(String(b.uploaded_at)));
+      GSB.id = id; GSB.gambar = []; GSB.web = null;
+      for (let i = 0; i < tapak.length; i++) {
+        status("Memuatkan gambar " + (i + 1) + " / " + tapak.length + "…");
+        const g = await LIVE.api("foto.get", { foto_id: tapak[i].foto_id });
+        if (!/^image\/(jpeg|png|webp)$/.test(g.mime) || !/^[A-Za-z0-9+/=]+$/.test(g.data)) continue;
+        GSB.gambar.push({ img: await imej(g.mime === "image/png" ? "image/png" : "image/jpeg", g.data), pilih: true, potong: 0, tarikh: tapak[i].diambil_pada });
+      }
+      status("Memuatkan laman web DBKL…");
+      const docs = (await LIVE.api("docs.list")).dokumen || [];
+      const web = docs.filter((d) => d.rujukan_jenis === "PROJEK" && d.rujukan === sbRef(o) && d.kategori === "Signboard Laman Web" && d.jenis === "PDF" && !d.tersembunyi)
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+      let webRalat = "";
+      if (web) {
+        try { const w = await LIVE.api("docs.imej", { doc_id: web.doc_id }); if (/^[A-Za-z0-9+/=]+$/.test(w.data)) GSB.web = await imej(w.mime, w.data); }
+        catch (e) { webRalat = e.message; }
+      }
+      if (!GSB.web) {
+        const ss = foto.filter((x) => x.peringkat === "LAMAN_WEB").pop();
+        if (ss) { const g = await LIVE.api("foto.get", { foto_id: ss.foto_id }); GSB.web = await imej(g.mime === "image/png" ? "image/png" : "image/jpeg", g.data); webRalat = ""; }
+      }
+      GSB.webRalat = webRalat || (!web && !GSB.web ? "Belum ada PDF laman web DBKL dalam fail ini. Halaman LAMAN WEB DBKL tidak dimasukkan." : "");
+      gsbPratonton();
+    } catch (e) { status(e.message || "Gagal menyediakan gambar."); }
+  }
+  /** Halaman HTML (pratonton + PDF) daripada geometri yang sama dengan PPTX. */
+  function gsbHalHtml(h) {
+    const P = SCE_PPTX.SLAID, pc = (a, b) => (a / b * 100).toFixed(4) + "%";
+    return '<section class="gsb-hal">' + SCE_PPTX.susun(h).map((e) => {
+      const kotak = "left:" + pc(e.f.x, P.w) + ";top:" + pc(e.f.y, P.h) + ";width:" + pc(e.f.w, P.w) + ";height:" + pc(e.f.h, P.h) + (e.rot ? ";transform:rotate(" + e.rot + "deg)" : "");
+      if (e.teks) return '<div class="gsb-teks" style="' + kotak + '">' + esc(e.teks) + "</div>";
+      const c = e.c, lw = 1 - c.l - c.r, lh = 1 - c.t - c.b;
+      return '<div class="gsb-kotak' + (e.garis ? " garis" : "") + '" style="' + kotak + '"><img alt="" src="' + e.img.src + '" style="width:' + (100 / lw).toFixed(4) + "%;height:" + (100 / lh).toFixed(4) + "%;left:" + (-c.l / lw * 100).toFixed(4) + "%;top:" + (-c.t / lh * 100).toFixed(4) + '%"></div>';
+    }).join("") + "</section>";
+  }
+  function gsbHalaman() {
+    const hal = [];
+    GSB.gambar.filter((g) => g.pilih).forEach((g) => { hal.push({ jenis: "PENUH", img: g.img }, { jenis: "DUA", img: g.img, potong: g.potong }); });
+    if (GSB.web) hal.push({ jenis: "WEB", img: GSB.web });
+    return hal;
+  }
+  function gsbNamaFail() {
+    const o = (LD.order || []).find((x) => x.id === GSB.id) || {};
+    const t = (GSB.gambar.find((g) => g.pilih && g.tarikh) || {}).tarikh || o.tarikhPasang || TODAY;
+    return "GAMBAR " + isoKeHbt(t).replace(/\//g, ".") + " " + gsbTetuan(o);
+  }
+  function gsbPratonton() {
+    const o = (LD.order || []).find((x) => x.id === GSB.id) || {};
+    const kawalan = GSB.gambar.map((g, i) => '<div class="gsb-kawal"><img alt="" src="' + g.img.src + '"><div><label class="check-row"><input type="checkbox" data-gsb-pilih="' + i + '"' + (g.pilih ? " checked" : "") + "> Gambar " + (i + 1) + (g.tarikh ? " · " + esc(fmtDate(g.tarikh)) : "") + "</label>" +
+      '<label class="small">Potongan papan tanda (halaman 2): <input type="range" min="0" max="100" step="1" value="' + Math.round(g.potong * 100) + '" data-gsb-potong="' + i + '"></label></div></div>').join("");
+    const hal = gsbHalaman();
+    openInfo({ title: "Gambar Signboard · " + gsbTetuan(o), body:
+      (GSB.gambar.length ? '<div class="gsb-kawalan">' + kawalan + "</div>" : note("Belum ada gambar tapak dalam fail ini. Tambah gambar dahulu.")) +
+      (GSB.webRalat ? note(GSB.webRalat) : "") +
+      '<div class="slip-pratonton gsb-pratonton" id="gsb-pratonton">' + hal.map(gsbHalHtml).join("") + "</div>" +
+      note("PPTX untuk disunting dalam PowerPoint; PDF (Cetak → Save as PDF) jika format PowerPoint lari. Nama fail cadangan: " + gsbNamaFail()),
+      actions: btn("Muat turun PPTX", "gsb-pptx", "", hal.length ? "" : " disabled") + " " + btn("Cetak / Simpan PDF", "gsb-cetak", "primary", hal.length ? "" : " disabled") });
+    modal.classList.add("modal-slip"); setTimeout(() => modal.addEventListener("close", () => modal.classList.remove("modal-slip"), { once: true }), 0);
+    const kemas = () => { const p = document.getElementById("gsb-pratonton"); if (p) p.innerHTML = gsbHalaman().map(gsbHalHtml).join(""); };
+    modal.querySelectorAll("[data-gsb-pilih]").forEach((c) => c.addEventListener("change", () => { GSB.gambar[+c.dataset.gsbPilih].pilih = c.checked; kemas(); }));
+    modal.querySelectorAll("[data-gsb-potong]").forEach((r) => r.addEventListener("input", () => { GSB.gambar[+r.dataset.gsbPotong].potong = r.value / 100; kemas(); }));
+  }
+  async function gsbPptx() {
+    const hal = gsbHalaman(); if (!hal.length) { toast("Tiada halaman untuk dijana."); return; }
+    try {
+      toast("Menjana PPTX…");
+      await muatSkrip("pptx-asas.js"); await muatSkrip("pptx-sce.js");
+      const keBait = (b64) => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; };
+      const cache = new Map();
+      const imgP = (im) => { if (!cache.has(im)) cache.set(im, { bait: keBait(im.b64), ext: im.ext, w: im.w, h: im.h }); return cache.get(im); };
+      const blob = new Blob(SCE_PPTX.bina(hal.map((h) => Object.assign({}, h, { img: imgP(h.img) })), { tajuk: gsbNamaFail() }), { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = gsbNamaFail() + ".pptx";
+      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      toast("PPTX dimuat turun.");
+    } catch (e) { toast(e.message || "Gagal menjana PPTX."); }
+  }
+  function gsbCetak() {
+    const hal = gsbHalaman(); if (!hal.length) return;
+    let area = document.getElementById("print-area");
+    if (!area) { area = document.createElement("div"); area.id = "print-area"; document.body.appendChild(area); }
+    area.innerHTML = '<div class="gsb">' + hal.map(gsbHalHtml).join("") + "</div>";
+    A["gj-print"]();
   }
 
   /* ========== Gambar signboard (sejarah per order) ========== */
@@ -3346,7 +3466,10 @@
     "sb-borang"(el) { sbBorang(el.dataset.id || ""); },
     "sb-padam"(el) { sbPadam(el.dataset.id); },
     "sb-dok"(el) { sbDokTambah(el.dataset.id, el.dataset.kat); },
-    "sb-laporan"(el) { sbLaporanGambar(el.dataset.id); },
+    "sb-laporan"(el) { gsbMula(el.dataset.id); },
+    "gsb-mula"() { gsbMula(""); },
+    "gsb-pptx"() { gsbPptx(); },
+    "gsb-cetak"() { gsbCetak(); },
     "sb-projek"(el) { const ref = el.dataset.ref; modal.close(); location.hash = "#projects"; const cuba = (n) => { if (LD.program && LD.order && PJ.meta !== null) pjBuka(ref); else if (n > 0) setTimeout(() => cuba(n - 1), 600); }; setTimeout(() => cuba(30), 300); },
     "lt-new"() { liveTaskNew(); },
     "lmp-tambah"(el) { ltLampiranTambah(el.dataset.task); },
@@ -3430,7 +3553,7 @@
     "gj-simpan"() { gjSimpan(); },
     "gj-cetak"() { gjCetak(); },
     "gj-print"() {
-      const t = document.title, n = document.querySelector("#modal .note"); const m = n && /Nama fail cadangan: (.*)$/.exec(n.textContent); if (m) document.title = m[1];
+      const t = document.title, m = [...document.querySelectorAll("#modal .note")].map((n) => /Nama fail cadangan: (.*)$/.exec(n.textContent)).find(Boolean); if (m) document.title = m[1];
       // Telefon (24/11/2026): susun halaman pada lebar desktop sebelum cetak supaya quotation / slip tidak "lari"; dipulihkan selepas cetak.
       const vp = document.querySelector("meta[name=viewport]"), asal = vp ? vp.getAttribute("content") : "";
       if (vp && window.innerWidth < 900) {
