@@ -3267,6 +3267,19 @@
       onSubmit: async () => { try { await LIVE.api("profil.foto", { emel: emel, foto: "" }); toast("Gambar dibuang."); } catch (e) { toast(e.message); } ST.list = null; stLoad(); } });
     const hantar = modal.querySelector('button[type="submit"]'); if (hantar) { hantar.classList.remove("primary"); hantar.classList.add("btn-bahaya"); }
   }
+  /** Tugasan aktif seseorang (dalam skop akses pengguna semasa). */
+  const stTugasanAktif = (emel) => ((LD.tasks && LD.tasks.tasks) || []).filter((t) => !["COMPLETED", "CANCELLED"].includes(t.status) && [t.primary_assignee].concat(String(t.team || "").split(",")).map((x) => x.trim().toLowerCase()).includes(emel));
+  /** Profil staf: gambar besar + maklumat ringkas. */
+  function stProfil(emel) {
+    const u = (ST.list || []).find((x) => x.emel === emel); if (!u) return;
+    const nama = namaPapar(u.nama || u.emel), sendiri = u.emel === LIVE_USER.emel;
+    openInfo({ title: "Profil staf", body: '<div class="profil-staf"><div class="profil-foto' + (u.foto ? " ada-foto" : "") + '">' + stFotoHtml(u, "profil-foto-img") + "</div>" +
+      '<h2 class="profil-nama">' + esc(nama) + (sendiri ? ' <span class="badge info">Anda</span>' : "") + "</h2>" +
+      '<p class="profil-jawatan">' + esc(u.jawatan || "—") + "</p>" +
+      '<p><span class="badge">' + esc(LIVE.roleLabel(u.role)) + "</span></p>" +
+      '<p class="small"><a href="mailto:' + esc(u.emel) + '">' + esc(u.emel) + "</a></p></div>",
+      actions: sendiri || LIVE_USER.role === "SUPER_ADMIN" ? btn(u.foto ? "Tukar gambar" : "+ Gambar", "st-foto", "", ' data-emel="' + esc(u.emel) + '"') : "" });
+  }
   function viewStaffLive() {
     const head = pageHead("Direktori Staf", "Kakitangan Sri Cheras Enterprise yang mempunyai akaun SCE CENTRAL.", liveTagDev);
     if (ST.err) return head + '<section class="panel"><div class="empty"><p>' + esc(ST.err) + "</p></div></section>";
@@ -3278,11 +3291,10 @@
     const pilih = f("staff.role"), kata = f("staff.q").toLowerCase().split(/\s+/).filter(Boolean);
     const list = ST.list.filter((u) => (pilih === "Semua" || LIVE.roleLabel(u.role) === pilih) && kata.every((w) => [u.nama, u.jawatan, u.emel, LIVE.roleLabel(u.role)].join(" ").toLowerCase().includes(w)))
       .sort((a, b) => ROLE_URUT.indexOf(a.role) - ROLE_URUT.indexOf(b.role) || a.nama.localeCompare(b.nama));
-    const tugasan = (LD.tasks && LD.tasks.tasks) || [];
-    const aktif = (emel) => tugasan.filter((t) => !["COMPLETED", "CANCELLED"].includes(t.status) && [t.primary_assignee].concat(String(t.team || "").split(",")).map((x) => x.trim().toLowerCase()).includes(emel)).length;
+    const aktif = (emel) => stTugasanAktif(emel).length;
     const nama = (u) => namaPapar(u.nama || u.emel);
     return head + '<div class="toolbar">' + searchBox("staff.q", "Cari nama, jawatan atau emel") + chips("staff.role", ["Semua"].concat(roleAda.map((r) => LIVE.roleLabel(r)))) + "</div>" +
-      (list.length ? '<div class="people">' + list.map((u) => '<article class="person"><span class="avatar' + (u.foto ? " ada-foto" : "") + '" aria-hidden="true">' + stFotoHtml(u, "avatar-foto") + "</span><div><h3>" + esc(nama(u)) +
+      (list.length ? '<div class="people">' + list.map((u) => '<article class="person"><button type="button" class="avatar avatar-btn' + (u.foto ? " ada-foto" : "") + '" data-action="st-profil" data-emel="' + esc(u.emel) + '" title="Lihat profil" aria-label="Lihat profil ' + esc(nama(u)) + '">' + stFotoHtml(u, "avatar-foto") + '</button><div><h3><button type="button" class="person-nama" data-action="st-profil" data-emel="' + esc(u.emel) + '" title="Lihat profil">' + esc(nama(u)) + "</button>" +
         (u.emel === LIVE_USER.emel ? ' <span class="badge info">Anda</span>' : "") + "</h3><p>" + esc(u.jawatan || "—") + " · " + esc(LIVE.roleLabel(u.role)) + '</p><p class="small"><a href="mailto:' + esc(u.emel) + '">' + esc(u.emel) + "</a></p>" +
         (LD.tasks && u.role !== "VIEWER" ? '<p class="small muted">' + aktif(u.emel) + " tugasan aktif</p>" : "") +
         (u.emel === LIVE_USER.emel || LIVE_USER.role === "SUPER_ADMIN" ? '<p class="person-aksi">' + btn(u.foto ? "Tukar gambar" : "+ Gambar", "st-foto", "small", ' data-emel="' + esc(u.emel) + '"') + (u.foto ? btn("Buang", "st-foto-buang", "small btn-buang", ' data-emel="' + esc(u.emel) + '"') : "") + "</p>" : "") + "</div></article>").join("") + "</div>"
@@ -3605,6 +3617,7 @@
     "pj-tapis"(el) { const t = el.dataset.tapis; state.filters["pj.status"] = t === "Selesai" ? "Selesai" : "Aktif"; state.filters["pj.jenis"] = t === "Signboard" ? "Signboard" : "Semua"; refresh(); },
     "st-foto"(el) { stFotoTukar(el.dataset.emel); },
     "st-foto-buang"(el) { stFotoBuang(el.dataset.emel); },
+    "st-profil"(el) { stProfil(el.dataset.emel); },
     "akh-borang"(el) { akhBorang({ tetuan: el.dataset.tetuan || "", jprb: el.dataset.jprb || "", tarikh: el.dataset.tarikh || "" }); },
     "rj-reload"() { rjReload(); },
     "rj-jana"() { rjJanaBorang(null); },

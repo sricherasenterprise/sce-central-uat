@@ -930,3 +930,18 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
 .foto-laras-kawalan label { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
 .foto-laras-kawalan input[type=range] { width: 100%; accent-color: var(--accent); }
 .foto-laras-reset { justify-self: start; }
+
+/* Direktori Staf: klik nama / gambar untuk profil */
+.avatar-btn { border: 0; padding: 0; cursor: pointer; font: inherit; }
+.avatar-btn:hover, .avatar-btn:focus-visible { box-shadow: 0 0 0 3px var(--teal-tint); }
+.person-nama { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+.person-nama:hover, .person-nama:focus-visible { color: var(--teal-strong); text-decoration: underline; text-underline-offset: 3px; }
+.profil-staf { display: grid; justify-items: center; text-align: center; gap: 4px; padding: 4px 0 8px; }
+.profil-staf p { margin: 0; }
+.profil-foto { width: 200px; height: 200px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--teal-tint); color: var(--teal-strong); font-size: 72px; font-weight: 700; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--border); margin-bottom: 10px; }
+.profil-foto-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.profil-nama { margin: 0; font-size: 22px; }
+.profil-jawatan { color: var(--muted); }
+.profil-tugasan { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.profil-tugasan li { display: grid; gap: 1px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-sm); }
+.profil-tugasan .link-btn { padding: 0; text-align: left; font-size: inherit; }
