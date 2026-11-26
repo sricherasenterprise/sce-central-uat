@@ -2528,7 +2528,7 @@
     try {
       const o = await LIVE.api("payroll.slip.get", { slip_id: id });
       const s = o.slip, item = {};
-      GJ_BAHAGIAN.forEach(([k]) => { item[k] = (s.item[k] || []).map((x) => ({ label: x.label, unit: x.unit, kadar: x.kadar, program: x.program, amaun: x.amaun_sen ? (x.amaun_sen / 100).toFixed(2) : "" })); });
+      GJ_BAHAGIAN.forEach(([k]) => { item[k] = (s.item[k] || []).map((x) => { const o = { label: x.label, unit: x.unit, kadar: x.kadar, program: x.program, amaun: x.amaun_sen ? (x.amaun_sen / 100).toFixed(2) : "" }; return k === "bonus" ? gjKomisenDari(x, o) : o; }); });
       GJ.edit = { slip_id: s.slip_id, version: s.version, status: s.status, pekerja_id: s.pekerja_id, bulan: s.bulan, tempoh_mula: s.tempoh_mula, tempoh_tamat: s.tempoh_tamat, tarikh_gaji: s.tarikh_gaji, item: item, pekerjaSnap: s.pekerja };
       refresh();
     } catch (e) { toast(e.message); }
@@ -2538,10 +2538,51 @@
     const el = document.getElementById("slip-editor"); if (!el || !GJ.edit) return;
     ["pekerja_id", "bulan", "tempoh_mula", "tempoh_tamat", "tarikh_gaji"].forEach((k) => { const i = el.querySelector('[name="' + k + '"]'); if (i) GJ.edit[k] = nilaiTarikh(i); });
     GJ_BAHAGIAN.forEach(([k]) => {
-      GJ.edit.item[k] = [...el.querySelectorAll('[data-bahagian="' + k + '"] .gj-baris')].map((r) => ({
-        label: r.querySelector('[data-f="label"]').value, unit: (r.querySelector('[data-f="unit"]') || {}).value || "", kadar: (r.querySelector('[data-f="kadar"]') || {}).value || "",
-        amaun: r.querySelector('[data-f="amaun"]').value, program: r.dataset.program || "" }));
+      GJ.edit.item[k] = [...el.querySelectorAll('[data-bahagian="' + k + '"] .gj-baris')].map((r) => {
+        const v = (f) => (r.querySelector('[data-f="' + f + '"]') || {}).value || "";
+        if (k === "bonus") {
+          const o = { tarikh: nilaiTarikh(r.querySelector('[data-f="tarikh"]')) || "", jenis: v("jenis"), tetuan: v("tetuan"), quotation: v("quotation"), peratus: v("peratus"), amaun: v("amaun"), program: r.dataset.program || "" };
+          const kira = gjKomisenKira(o.quotation, o.peratus);
+          const a = r.querySelector('[data-f="amaun"]');
+          if (kira !== null) { o.amaun = (kira / 100).toFixed(2); if (a && a.value !== o.amaun) a.value = o.amaun; }
+          if (a && !a.disabled) a.readOnly = kira !== null;
+          o.label = o.tetuan || o.tarikh ? "" : (r.dataset.label || ""); // label dibina oleh server daripada medan; rekod lama kekal label asal
+          return o;
+        }
+        return { label: v("label"), unit: v("unit"), kadar: v("kadar"), amaun: v("amaun"), program: r.dataset.program || "" };
+      });
     });
+  }
+  /* ---------- Komisen event (Bonus Pengendalian Majlis), 27/11/2026: amaun = quotation × % ---------- */
+  const GJ_JENIS_KOMISEN = ["Communication Strategy", "Sesi Libat Urus", "SLU Parlimen", "Lain-lain"];
+  const GJ_JENIS_PROGRAM = { COMSTRA: "Communication Strategy", SLU: "Sesi Libat Urus", "SLU PARLIMEN": "SLU Parlimen" };
+  /** Pulangkan amaun komisen dalam sen, atau null jika quotation / % belum lengkap. Sama dengan semakKomisen_ di backend. */
+  function gjKomisenKira(q, p) {
+    const sen = gjSen(q), pc = String(p == null ? "" : p).replace(/[%\s]/g, "");
+    if (isNaN(sen) || sen <= 0 || !/^\d{1,3}(\.\d{1,2})?$/.test(pc) || Number(pc) > 100) return null;
+    return Math.round(sen * Number(pc) / 100);
+  }
+  /** Satu baris komisen: tarikh, jenis event, tetuan, amaun quotation, %, amaun komisen (dikira). */
+  function gjBarisKomisen(x, i, dis, kunci) {
+    const kira = gjKomisenKira(x.quotation, x.peratus), amaun = kira !== null ? (kira / 100).toFixed(2) : x.amaun || "";
+    const lama = !x.tarikh && !x.tetuan && x.label;
+    return '<div class="gj-baris gj-komisen" data-program="' + esc(x.program || "") + '" data-label="' + esc(lama ? x.label : x.labelAsal || "") + '">' +
+      '<span class="gj-k-tarikh">' + tarikhHtml('data-f="tarikh" aria-label="Tarikh event"', x.tarikh || "", dis) + "</span>" +
+      '<select data-f="jenis" class="inline-select" aria-label="Jenis event"' + dis + '><option value="">Jenis event…</option>' + GJ_JENIS_KOMISEN.map((j) => '<option value="' + esc(j) + '"' + (j === x.jenis ? " selected" : "") + ">" + esc(j) + "</option>").join("") + "</select>" +
+      '<input data-f="tetuan" placeholder="' + (lama ? esc(x.label) : "Nama tetuan") + '" value="' + esc(x.tetuan || "") + '"' + dis + ' aria-label="Nama tetuan">' +
+      '<input data-f="quotation" class="gj-amaun" inputmode="decimal" placeholder="Quotation" value="' + esc(x.quotation || "") + '"' + dis + ' aria-label="Amaun quotation (RM)">' +
+      '<input data-f="peratus" class="gj-kecil" inputmode="decimal" placeholder="%" value="' + esc(x.peratus || "") + '"' + dis + ' aria-label="% komisen">' +
+      '<input data-f="amaun" class="gj-amaun" inputmode="decimal" placeholder="0.00" value="' + esc(amaun) + '"' + dis + (kira !== null ? " readonly" : "") + ' aria-label="Amaun komisen (RM)" title="Dikira automatik: amaun quotation × % komisen">' +
+      (kunci ? "" : '<button type="button" class="icon-btn" data-action="gj-buang" data-k="bonus" data-i="' + i + '" aria-label="Buang baris">✕</button>') + "</div>";
+  }
+  /** Rekod dari server → medan editor. Rekod lama (label sahaja) dipecahkan: "12/11/2026 - CS TETUAN X". */
+  function gjKomisenDari(x, o) {
+    const r = Object.assign(o, { tarikh: x.tarikh || "", jenis: x.jenis || "", tetuan: x.tetuan || "", quotation: x.quotation_sen ? (x.quotation_sen / 100).toFixed(2) : "", peratus: x.peratus || "", labelAsal: x.label || "" });
+    if (!r.tarikh && !r.tetuan && x.label) {
+      const m = /^(\d{2})\/(\d{2})\/(\d{4})\s*-\s*(SLU PARLIMEN|CS|SLU)?\s*(?:TETUAN\s+)?(.*)$/i.exec(x.label);
+      if (m) { r.tarikh = m[3] + "-" + m[2] + "-" + m[1]; r.jenis = ({ CS: "Communication Strategy", SLU: "Sesi Libat Urus", "SLU PARLIMEN": "SLU Parlimen" })[(m[4] || "").toUpperCase()] || ""; r.tetuan = m[5].trim(); }
+    }
+    return r;
   }
   function gjJumlah(e) {
     const j = {}; let sah = true;
@@ -2563,7 +2604,8 @@
     const program = (LD.program || []).filter((p) => p.tarikh && p.tarikh.slice(0, 7) === e.bulan && p.tahap.event === "siap");
     if (!LD.program && !LD.err.program) liveLoad("program");
     const bahagian = GJ_BAHAGIAN.map(([k, label]) => '<div class="gj-bahagian" data-bahagian="' + k + '"><div class="gj-bahagian-head"><h3>' + esc(label) + "</h3><span data-jumlah=\"" + k + '">RM ' + gjRM(t.j[k]) + "</span></div>" +
-      e.item[k].map((x, i) => '<div class="gj-baris" data-program="' + esc(x.program || "") + '"><input data-f="label" placeholder="Keterangan" value="' + esc(x.label) + '"' + dis + ' aria-label="Keterangan">' +
+      (k === "bonus" && e.item[k].length ? '<div class="gj-komisen-kepala" aria-hidden="true"><span>Tarikh</span><span>Jenis event</span><span>Nama tetuan</span><span>Amaun quotation (RM)</span><span>% komisen</span><span>Amaun komisen (RM)</span><span></span></div>' : "") +
+      e.item[k].map((x, i) => k === "bonus" ? gjBarisKomisen(x, i, dis, kunci) : '<div class="gj-baris" data-program="' + esc(x.program || "") + '"><input data-f="label" placeholder="Keterangan" value="' + esc(x.label) + '"' + dis + ' aria-label="Keterangan">' +
         (k === "tuntutan" || k === "elaun" ? '<input data-f="unit" class="gj-kecil" placeholder="Jam/Unit" value="' + esc(x.unit || "") + '"' + dis + ' aria-label="Jam atau unit"><input data-f="kadar" class="gj-kecil" placeholder="Kadar" value="' + esc(x.kadar || "") + '"' + dis + ' aria-label="Kadar">' : "") +
         '<input data-f="amaun" class="gj-amaun" inputmode="decimal" placeholder="0.00" value="' + esc(x.amaun) + '"' + dis + ' aria-label="Amaun (RM)">' +
         (kunci ? "" : '<button type="button" class="icon-btn" data-action="gj-buang" data-k="' + k + '" data-i="' + i + '" aria-label="Buang baris">✕</button>') + "</div>").join("") +
@@ -2628,7 +2670,7 @@
     const s = o.slip, c = o.syarikat, p = s.pekerja || {}, fd = (d) => (d ? fmtDate(d) : "—");
     const rows = GJ_BAHAGIAN.map(([k, label]) => {
       const it = s.item[k] || [];
-      const isi = k === "bonus" ? (it.length ? '<tr><td colspan="4">Communication Strategy / Sesi Libat Urus:</td></tr>' + it.map((x, i) => '<tr><td>' + (i + 1) + ". " + esc(x.label) + '</td><td></td><td></td><td class="rm"><span>RM</span>' + gjRM(x.amaun_sen) + "</td></tr>").join("") : "")
+      const isi = k === "bonus" ? (it.length ? '<tr><td>Communication Strategy / Sesi Libat Urus:</td>' + (it.some((x) => x.quotation_sen) ? '<td class="c"><i>Quotation</i></td><td class="c"><i>% Komisen</i></td><td></td>' : '<td colspan="3"></td>') + "</tr>" + it.map((x, i) => '<tr><td>' + (i + 1) + ". " + esc(x.label) + '</td><td class="c">' + (x.quotation_sen ? "RM " + gjRM(x.quotation_sen) : "") + '</td><td class="c">' + (x.peratus ? esc(x.peratus) + "%" : "") + '</td><td class="rm"><span>RM</span>' + gjRM(x.amaun_sen) + "</td></tr>").join("") : "")
         : it.map((x, i) => "<tr><td>" + (k === "tuntutan" ? (i + 1) + ". " : "") + esc(x.label) + '</td><td class="c">' + esc(x.unit || "") + '</td><td class="c">' + esc(x.kadar || "") + '</td><td class="rm"><span>RM</span>' + gjRM(x.amaun_sen) + "</td></tr>").join("");
       return '<tr class="sec"><td colspan="4"><u><b>' + esc(label) + "</b></u></td></tr>" + isi + '<tr class="sub"><td colspan="3"></td><td class="rm"><span>RM</span>' + gjRM((s.jumlah || {})[k] || 0) + "</td></tr>";
     }).join("");
@@ -2658,7 +2700,7 @@
     if (ev.target.matches("[data-gj-program]") && ev.target.value) {
       const p = (LD.program || []).find((x) => x.kunci === ev.target.value);
       gjBacaBorang();
-      if (p && !GJ.edit.item.bonus.some((x) => x.program === p.kunci)) GJ.edit.item.bonus.push({ label: fmtDate(p.tarikh) + " - " + p.tetuan, amaun: "", program: p.kunci });
+      if (p && !GJ.edit.item.bonus.some((x) => x.program === p.kunci)) GJ.edit.item.bonus.push({ label: "", tarikh: p.tarikh || "", jenis: GJ_JENIS_PROGRAM[p.jenis] || "", tetuan: String(p.tetuan || "").replace(/^TETUAN\s+/i, ""), quotation: "", peratus: "", amaun: "", program: p.kunci });
       refresh();
     }
   });

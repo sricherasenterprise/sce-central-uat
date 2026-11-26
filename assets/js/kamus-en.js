@@ -203,6 +203,9 @@ window.SCE_KAMUS_EN = {
   "Rekod sebenar Communication Strategy, Sesi Libat Urus dan SLU Parlimen daripada Sheet operasi.": "Live Communication Strategy, Engagement Session and SLU Parliament records from the operations Sheet.",
   "Semua projek SCE di satu tempat: dicipta automatik daripada rekod Program dan Order Signboard, lengkap dengan tugasan dan dokumen.": "All SCE projects in one place: created automatically from Program and Order Signboard records, complete with tasks and documents.",
   "Bulan": "Month", "Semua bulan": "All months", "Buang slip": "Remove payslip",
+  "Jenis event": "Event type", "Jenis event…": "Event type…", "Tarikh event": "Event date", "Nama tetuan": "Tetuan name", "Amaun quotation (RM)": "Quotation amount (RM)",
+  "% komisen": "% commission", "Amaun komisen (RM)": "Commission amount (RM)", "Dikira automatik: amaun quotation × % komisen": "Calculated automatically: quotation amount × % commission",
+  "Sesi Libat Urus": "Engagement Session",
   "Tiada perubahan role.": "No role change.", "Role dikemas kini.": "Role updated.", "Gagal memuat semula.": "Failed to reload.", "Gagal menyediakan laporan.": "Failed to prepare the report."
 };
 
