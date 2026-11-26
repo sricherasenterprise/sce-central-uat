@@ -920,3 +920,13 @@ button.pj-pilih-kad { display: grid; gap: 4px; }
   .gj-baris.gj-komisen [data-f="tetuan"] { grid-column: 1 / -1; }
   .gj-baris.gj-komisen .icon-btn { justify-self: end; }
 }
+
+/* Laras gambar profil (seret / gelangsar Atas-Bawah, Kiri-Kanan, Zum) */
+.foto-laras { grid-column: 1 / -1; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.foto-laras[hidden] { display: none; }
+.foto-laras-kanvas { width: 160px; height: 160px; border-radius: 50%; border: 2px solid var(--border-strong); cursor: grab; touch-action: none; background: var(--surface); }
+.foto-laras-kanvas:active { cursor: grabbing; }
+.foto-laras-kawalan { display: grid; gap: 8px; flex: 1 1 200px; min-width: 180px; }
+.foto-laras-kawalan label { display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
+.foto-laras-kawalan input[type=range] { width: 100%; accent-color: var(--accent); }
+.foto-laras-reset { justify-self: start; }

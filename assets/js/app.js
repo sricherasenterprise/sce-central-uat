@@ -3193,31 +3193,73 @@
     const saya = (ST.list || []).find((u) => u.emel === LIVE_USER.emel), el = document.getElementById("profile-avatar");
     if (el && saya && saya.foto) { el.innerHTML = stFotoHtml(saya, "avatar-foto"); el.classList.add("ada-foto"); }
   }
-  /** Potong tengah jadi segi empat dan mampat ke JPEG (avatar). */
-  function fotoSegi(fail, saiz, kualiti) {
+  /** Baca fail gambar sebagai elemen Image. */
+  function fotoImej(fail) {
     return new Promise((ok, gagal) => {
       const r = new FileReader(); r.onerror = () => gagal(new Error("Gagal membaca fail."));
-      r.onload = () => { const img = new Image(); img.onerror = () => gagal(new Error("Fail bukan gambar yang boleh dibaca."));
-        img.onload = () => { const sisi = Math.min(img.width, img.height), c = document.createElement("canvas"); c.width = c.height = saiz;
-          const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, saiz, saiz); g.drawImage(img, (img.width - sisi) / 2, (img.height - sisi) / 2, sisi, sisi, 0, 0, saiz, saiz); ok(c.toDataURL("image/jpeg", kualiti)); };
-        img.src = r.result; };
+      r.onload = () => { const img = new Image(); img.onerror = () => gagal(new Error("Fail bukan gambar yang boleh dibaca.")); img.onload = () => ok(img); img.src = r.result; };
       r.readAsDataURL(fail);
     });
+  }
+  /** Lukis potongan segi empat: k = { x, y (0..1, kedudukan), zum (1..4) }. */
+  function fotoLukis(img, c, k) {
+    const saiz = c.width, zum = Math.max(1, k.zum || 1), sisi = Math.min(img.width, img.height) / zum;
+    const sx = (img.width - sisi) * (k.x == null ? 0.5 : k.x), sy = (img.height - sisi) * (k.y == null ? 0.5 : k.y);
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, saiz, saiz); g.drawImage(img, sx, sy, sisi, sisi, 0, 0, saiz, saiz);
+  }
+  /** Potong segi empat (ikut laras pengguna, asal = tengah) dan mampat ke JPEG (avatar). */
+  async function fotoSegi(fail, saiz, kualiti, k) {
+    const img = fail instanceof Image ? fail : await fotoImej(fail), c = document.createElement("canvas"); c.width = c.height = saiz;
+    fotoLukis(img, c, k || {}); return c.toDataURL("image/jpeg", kualiti);
   }
   function stFotoTukar(emel) {
     const u = (ST.list || []).find((x) => x.emel === emel); if (!u) return;
     openForm({ live: true, liveNota: "Gambar disimpan dalam SCE-DEV-TASKS (tab PROFIL) sebagai gambar kecil. Dilihat oleh semua pengguna SCE CENTRAL.", title: "Gambar profil: " + namaPapar(u.nama), submit: "Simpan gambar",
-      intro: note("Pilih gambar (JPEG / PNG). Gambar dipotong segi empat di tengah dan dikecilkan secara automatik."), fields: [{ name: "fail", label: "Gambar", type: "file", required: true, full: true }],
+      intro: note("Pilih gambar (JPEG / PNG), kemudian laras kedudukan: seret gambar dalam bulatan atau guna gelangsar Atas/Bawah, Kiri/Kanan dan Zum."), fields: [{ name: "fail", label: "Gambar", type: "file", required: true, full: true }],
       onSubmit: async (d) => {
         const g = d.fail; if (!g || !g.size) { toast("Sila pilih gambar."); return; }
         if (!/^image\//.test(g.type)) { toast("Fail mesti gambar."); return; }
         try {
-          let foto = await fotoSegi(g, 240, 0.82); if (foto.length > 58000) foto = await fotoSegi(g, 200, 0.7);
+          const src = laras.img || g;
+          let foto = await fotoSegi(src, 240, 0.82, laras); if (foto.length > 58000) foto = await fotoSegi(src, 200, 0.7, laras);
           await LIVE.api("profil.foto", { emel: emel, foto: foto }); toast("Gambar profil disimpan.");
         } catch (e) { toast(e.message); }
         ST.list = null; stLoad();
       } });
-    const inp = modal.querySelector('input[type="file"]'); if (inp) inp.setAttribute("accept", "image/*");
+    const laras = { x: 0.5, y: 0.5, zum: 1, img: null };
+    const inp = modal.querySelector('input[type="file"]'); if (!inp) return;
+    inp.setAttribute("accept", "image/*");
+    const kotak = document.createElement("div"); kotak.className = "foto-laras"; kotak.hidden = true;
+    kotak.innerHTML = '<canvas class="foto-laras-kanvas" width="320" height="320" title="Seret untuk laras kedudukan"></canvas>' +
+      '<div class="foto-laras-kawalan">' +
+      '<label>Atas / Bawah<input type="range" data-k="y" min="0" max="1" step="0.01" value="0.5"></label>' +
+      '<label>Kiri / Kanan<input type="range" data-k="x" min="0" max="1" step="0.01" value="0.5"></label>' +
+      '<label>Zum<input type="range" data-k="zum" min="1" max="4" step="0.05" value="1"></label>' +
+      '<button type="button" class="btn small foto-laras-reset">Set semula</button></div>';
+    (inp.closest(".field") || inp.parentElement).after(kotak);
+    const kanvas = kotak.querySelector("canvas"), gel = kotak.querySelectorAll("input[type=range]");
+    const lukis = () => { if (laras.img) fotoLukis(laras.img, kanvas, laras); };
+    const segerak = () => gel.forEach((r) => { r.value = laras[r.dataset.k]; });
+    gel.forEach((r) => r.addEventListener("input", () => { laras[r.dataset.k] = Number(r.value); lukis(); }));
+    kotak.querySelector(".foto-laras-reset").addEventListener("click", () => { laras.x = 0.5; laras.y = 0.5; laras.zum = 1; segerak(); lukis(); });
+    inp.addEventListener("change", async () => {
+      const f = inp.files && inp.files[0]; laras.img = null; kotak.hidden = true;
+      if (!f || !/^image\//.test(f.type)) return;
+      try { laras.img = await fotoImej(f); laras.x = 0.5; laras.y = 0.5; laras.zum = 1; segerak(); kotak.hidden = false; lukis(); } catch (e) { toast(e.message); }
+    });
+    // Seret dalam bulatan: gerak gambar ikut jari / tetikus
+    let seret = null;
+    kanvas.addEventListener("pointerdown", (e) => { if (!laras.img) return; seret = { px: e.clientX, py: e.clientY, x: laras.x, y: laras.y }; kanvas.setPointerCapture(e.pointerId); e.preventDefault(); });
+    kanvas.addEventListener("pointermove", (e) => {
+      if (!seret) return;
+      const img = laras.img, sisi = Math.min(img.width, img.height) / laras.zum, skala = sisi / kanvas.getBoundingClientRect().width;
+      const lebihX = img.width - sisi, lebihY = img.height - sisi;
+      if (lebihX > 0) laras.x = Math.min(1, Math.max(0, seret.x - (e.clientX - seret.px) * skala / lebihX));
+      if (lebihY > 0) laras.y = Math.min(1, Math.max(0, seret.y - (e.clientY - seret.py) * skala / lebihY));
+      segerak(); lukis();
+    });
+    const tamat = () => { seret = null; };
+    kanvas.addEventListener("pointerup", tamat); kanvas.addEventListener("pointercancel", tamat);
   }
   function stFotoBuang(emel) {
     const u = (ST.list || []).find((x) => x.emel === emel); if (!u) return;

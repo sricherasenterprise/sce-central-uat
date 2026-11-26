@@ -179,7 +179,7 @@ window.SCE_KAMUS_EN = {
   /* ---- Toast & mesej ---- */
   "Anda tiada kebenaran untuk tindakan ini.": "You do not have permission for this action.", "Dihantar untuk semakan.": "Submitted for review.", "Dikemas kini.": "Updated.",
   "Fail laman web mesti PDF.": "The website file must be a PDF.", "Fail mesti PDF.": "The file must be a PDF.", "Fail mesti gambar.": "The file must be an image.",
-  "Gambar dibuang.": "Photo removed.", "Gambar profil disimpan.": "Profile photo saved.", "Imej tandatangan disimpan.": "Signature image saved.",
+  "Gambar dibuang.": "Photo removed.", "Atas / Bawah": "Up / Down", "Kiri / Kanan": "Left / Right", "Zum": "Zoom", "Set semula": "Reset", "Seret untuk laras kedudukan": "Drag to adjust position", "Pilih gambar (JPEG / PNG), kemudian laras kedudukan: seret gambar dalam bulatan atau guna gelangsar Atas/Bawah, Kiri/Kanan dan Zum.": "Choose a photo (JPEG / PNG), then adjust its position: drag the photo inside the circle or use the Up/Down, Left/Right and Zoom sliders.", "Gambar profil disimpan.": "Profile photo saved.", "Imej tandatangan disimpan.": "Signature image saved.",
   "Isi tarikh pemasangan signboard dahulu (hh/bb/tttt).": "Fill in the signboard installation date first (dd/mm/yyyy).", "Kandungan fail bukan PDF.": "The file content is not a PDF.",
   "Kemajuan disimpan.": "Progress saved.", "Kemas kini dihantar.": "Update sent.", "Komen ditambah.": "Comment added.", "Lampiran direkod.": "Attachment recorded.",
   "Menjana PPTX…": "Generating PPTX…", "Menyediakan…": "Preparing…", "Menyimpan PDF laman web…": "Saving website PDF…", "PDF terlalu besar (maks 5 MB).": "PDF too large (max 5 MB).",
